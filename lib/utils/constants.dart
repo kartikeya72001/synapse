@@ -12,6 +12,7 @@ class AppConstants {
   static const String lastDeadLinkCheckPref = 'last_dead_link_check';
   static const String qsTilePromptedPref = 'qs_tile_prompted';
   static const String galleryImportPromptedPref = 'gallery_import_prompted';
+  static const String backgroundSharePref = 'background_share';
 
   static const int maxFreeLlmCalls = 2;
 

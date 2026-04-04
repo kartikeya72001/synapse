@@ -1,10 +1,12 @@
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
 import '../models/thought.dart';
+import '../models/chat_message.dart';
 
 class DatabaseService {
   static Database? _database;
   static const String _tableName = 'thoughts';
+  static const String _chatTable = 'chat_messages';
 
   Future<Database> get database async {
     if (_database != null) return _database!;
@@ -14,13 +16,23 @@ class DatabaseService {
 
   Future<Database> exposeDatabase() async => database;
 
+  static const String _createChatTableSql = '''
+    CREATE TABLE IF NOT EXISTS $_chatTable (
+      id TEXT PRIMARY KEY,
+      text TEXT NOT NULL,
+      role TEXT NOT NULL,
+      thoughtId TEXT,
+      timestamp TEXT NOT NULL
+    )
+  ''';
+
   Future<Database> _initDatabase() async {
     final dbPath = await getDatabasesPath();
     final path = join(dbPath, 'synapse.db');
 
     return await openDatabase(
       path,
-      version: 3,
+      version: 4,
       onCreate: (db, version) async {
         await db.execute('''
           CREATE TABLE $_tableName (
@@ -65,6 +77,7 @@ class DatabaseService {
             FOREIGN KEY (thoughtId) REFERENCES thoughts(id) ON DELETE CASCADE
           )
         ''');
+        await db.execute(_createChatTableSql);
       },
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 2) {
@@ -109,6 +122,9 @@ class DatabaseService {
               FOREIGN KEY (thoughtId) REFERENCES thoughts(id) ON DELETE CASCADE
             )
           ''');
+        }
+        if (oldVersion < 4) {
+          await db.execute(_createChatTableSql);
         }
       },
     );
@@ -192,5 +208,30 @@ class DatabaseService {
       'SELECT COUNT(*) as count FROM $_tableName',
     );
     return Sqflite.firstIntValue(result) ?? 0;
+  }
+
+  // ── Chat Messages ──
+
+  Future<void> insertChatMessage(ChatMessage message) async {
+    final db = await database;
+    await db.insert(
+      _chatTable,
+      message.toMap(),
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  Future<List<ChatMessage>> getAllChatMessages() async {
+    final db = await database;
+    final maps = await db.query(
+      _chatTable,
+      orderBy: 'timestamp ASC',
+    );
+    return maps.map((m) => ChatMessage.fromMap(m)).toList();
+  }
+
+  Future<void> clearChatMessages() async {
+    final db = await database;
+    await db.delete(_chatTable);
   }
 }

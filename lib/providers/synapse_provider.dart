@@ -1,8 +1,10 @@
 import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 import '../models/thought.dart';
 import '../models/thought_group.dart';
+import '../models/chat_message.dart';
 import '../services/database_service.dart';
 import '../services/group_service.dart';
 import '../services/llm_service.dart';
@@ -54,6 +56,17 @@ class SynapseProvider extends ChangeNotifier {
   int _deadLinkCount = 0;
   bool _isCheckingDeadLinks = false;
 
+  // Chat state
+  List<ChatMessage> _chatMessages = [];
+  bool _isChatLoading = false;
+
+  // Tab / navigation state
+  Thought? _pendingSharedThought;
+  Thought? get pendingSharedThought => _pendingSharedThought;
+  void consumePendingSharedThought() {
+    _pendingSharedThought = null;
+  }
+
   SynapseProvider() {
     _groupService = GroupService(() => _db.database);
   }
@@ -65,6 +78,9 @@ class SynapseProvider extends ChangeNotifier {
               _selectedGroup == null
           ? _items
           : _filteredItems;
+  int get totalItemCount => _items.length;
+  bool get isFilterActive =>
+      _selectedCategory != null || _selectedGroup != null || _searchQuery.isNotEmpty;
   ThoughtCategory? get selectedCategory => _selectedCategory;
   String get searchQuery => _searchQuery;
   bool get isLoading => _isLoading;
@@ -80,6 +96,8 @@ class SynapseProvider extends ChangeNotifier {
       _bundleSuggestions.where((s) => !s.isDismissed).toList();
   int get deadLinkCount => _deadLinkCount;
   bool get isCheckingDeadLinks => _isCheckingDeadLinks;
+  List<ChatMessage> get chatMessages => _chatMessages;
+  bool get isChatLoading => _isChatLoading;
 
   int get unclassifiedCount => _items.where((i) => !i.isClassified).length;
   String? get lastLlmError => _llm.lastError;
@@ -88,6 +106,7 @@ class SynapseProvider extends ChangeNotifier {
     await _loadThemeMode();
     await loadThoughts();
     await loadGroups();
+    await loadChatMessages();
     _purgeExpiredThoughts();
     _checkDeadLinksIfNeeded();
   }
@@ -180,16 +199,34 @@ class SynapseProvider extends ChangeNotifier {
     }
   }
 
-  Future<void> addThought(Thought thought) async {
-    if (_items.any((t) => t.id == thought.id)) {
+  Future<void> addThought(Thought thought, {bool fromShare = false}) async {
+    final isNew = !_items.any((t) => t.id == thought.id);
+    if (!isNew) {
       final idx = _items.indexWhere((t) => t.id == thought.id);
       if (idx >= 0) _items[idx] = thought;
     } else {
       _items.insert(0, thought);
     }
     _applyFilters();
+    if (fromShare && isNew) {
+      final prefs = await SharedPreferences.getInstance();
+      final bgMode = prefs.getBool(AppConstants.backgroundSharePref) ?? false;
+      if (!bgMode) {
+        _pendingSharedThought = thought;
+      }
+    }
     notifyListeners();
     _checkAutoBundle();
+  }
+
+  /// Re-inserts a previously deleted thought back into the database and lists.
+  Future<void> restoreThought(Thought thought) async {
+    await _db.insertThought(thought);
+    if (!_items.any((t) => t.id == thought.id)) {
+      _items.insert(0, thought);
+    }
+    _applyFilters();
+    notifyListeners();
   }
 
   Future<void> deleteThought(String id) async {
@@ -251,11 +288,64 @@ class SynapseProvider extends ChangeNotifier {
       await updateThought(_applyResult(thought, result));
       return true;
     }
-    // Single link — use batch of 1
+
+    // Try image-enhanced classification for links with preview images
+    if (thought.previewImageUrl != null) {
+      final imageBytes = await _downloadImage(thought.previewImageUrl!);
+      if (imageBytes != null) {
+        final isSocial = thought.tags.contains('social-media') ||
+            (thought.url != null && _isSocialMediaUrl(thought.url!));
+        final result = isSocial
+            ? await _llm.extractAndClassifyPost(thought, imageBytes)
+            : await _llm.classifyLinkWithImage(thought, imageBytes);
+        if (result != null) {
+          await updateThought(_applyResult(thought, result));
+          return true;
+        }
+      }
+    }
+
+    // Fallback: text-only batch of 1
     final results = await _llm.classifyBatch([thought]);
     if (results == null || results.isEmpty) return false;
     await updateThought(_applyResult(thought, results.first));
     return true;
+  }
+
+  static const _mobileUserAgent =
+      'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 '
+      '(KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36';
+
+  static bool _isSocialMediaUrl(String url) {
+    final host = Uri.tryParse(url)?.host.toLowerCase() ?? '';
+    return host.contains('instagram.com') ||
+        host.contains('tiktok.com') ||
+        host.contains('threads.net') ||
+        host.contains('twitter.com') ||
+        host.contains('x.com');
+  }
+
+  Future<Uint8List?> _downloadImage(String url) async {
+    try {
+      final refererHost = Uri.tryParse(url);
+      final referer = refererHost != null
+          ? '${refererHost.scheme}://${refererHost.host}/'
+          : '';
+      final response = await http.get(
+        Uri.parse(url),
+        headers: {
+          'User-Agent': _mobileUserAgent,
+          'Referer': referer,
+          'Accept': 'image/*,*/*;q=0.8',
+        },
+      ).timeout(const Duration(seconds: 15));
+      if (response.statusCode == 200 && response.bodyBytes.length > 1000) {
+        return response.bodyBytes;
+      }
+    } catch (e) {
+      debugPrint('Image download failed: $e');
+    }
+    return null;
   }
 
   void cancelClassification() {
@@ -279,11 +369,49 @@ class SynapseProvider extends ChangeNotifier {
     final links = unclassified.where((t) => t.type == ThoughtType.link).toList();
     final screenshots = unclassified.where((t) => t.type == ThoughtType.screenshot).toList();
 
-    // Process links in batches of 8
-    for (int i = 0; i < links.length; i += LlmService.batchSize) {
+    // Split links into those with images (for vision API) and text-only
+    final linksWithImage = links.where((t) => t.previewImageUrl != null).toList();
+    final linksTextOnly = links.where((t) => t.previewImageUrl == null).toList();
+
+    // Process links with images individually (vision API for richer extraction)
+    for (final thought in linksWithImage) {
       if (!_isClassifyingAll) break;
 
-      final batch = links.sublist(i, (i + LlmService.batchSize).clamp(0, links.length));
+      final imageBytes = await _downloadImage(thought.previewImageUrl!);
+      Map<String, dynamic>? result;
+      if (imageBytes != null) {
+        result = await _llm.classifyLinkWithImage(thought, imageBytes);
+      }
+      // Fallback to text-only if image classification fails
+      result ??= (await _llm.classifyBatch([thought]))?.firstOrNull;
+
+      if (result != null) {
+        await updateThought(_applyResult(thought, result));
+        successCount++;
+        consecutiveFailures = 0;
+      } else {
+        consecutiveFailures++;
+        if (consecutiveFailures >= 3) {
+          _lastClassifyError = _llm.lastError ?? 'Multiple failures, stopping.';
+          break;
+        }
+      }
+      _classifyProgress++;
+      notifyListeners();
+
+      if (_isClassifyingAll && thought != linksWithImage.last) {
+        await Future.delayed(const Duration(seconds: 4));
+      }
+    }
+
+    // Process text-only links in batches
+    for (int i = 0; i < linksTextOnly.length; i += LlmService.batchSize) {
+      if (!_isClassifyingAll) break;
+
+      final batch = linksTextOnly.sublist(
+        i,
+        (i + LlmService.batchSize).clamp(0, linksTextOnly.length),
+      );
       final results = await _llm.classifyBatch(batch);
 
       if (results != null && results.isNotEmpty) {
@@ -294,7 +422,6 @@ class SynapseProvider extends ChangeNotifier {
           _classifyProgress++;
           notifyListeners();
         }
-        // Mark any unmatched items in the batch as progressed
         _classifyProgress += (batch.length - count);
         notifyListeners();
         consecutiveFailures = 0;
@@ -308,7 +435,7 @@ class SynapseProvider extends ChangeNotifier {
         }
       }
 
-      if (_isClassifyingAll && i + LlmService.batchSize < links.length) {
+      if (_isClassifyingAll && i + LlmService.batchSize < linksTextOnly.length) {
         await Future.delayed(const Duration(seconds: 4));
       }
     }
@@ -381,7 +508,74 @@ class SynapseProvider extends ChangeNotifier {
     await updateThought(updated);
   }
 
-  // ── Q&A ──
+  // ── Chat ──
+
+  Future<void> loadChatMessages() async {
+    _chatMessages = await _db.getAllChatMessages();
+    if (_chatMessages.isEmpty) {
+      final welcome = ChatMessage(
+        id: const Uuid().v4(),
+        text: "I'm the Synapse cortex. Share links and posts from any app, "
+            "then ask me anything about them.",
+        role: ChatMessageRole.assistant,
+      );
+      await _db.insertChatMessage(welcome);
+      _chatMessages = [welcome];
+    }
+    notifyListeners();
+  }
+
+  Future<void> addChatMessage(ChatMessage message) async {
+    _chatMessages.add(message);
+    await _db.insertChatMessage(message);
+    notifyListeners();
+  }
+
+  Future<void> sendChatMessage(String text) async {
+    final userMsg = ChatMessage(
+      id: const Uuid().v4(),
+      text: text,
+      role: ChatMessageRole.user,
+    );
+    await addChatMessage(userMsg);
+
+    _isChatLoading = true;
+    notifyListeners();
+
+    final hasKey = await _llm.hasApiKey();
+    if (!hasKey) {
+      _isChatLoading = false;
+      await addChatMessage(ChatMessage(
+        id: const Uuid().v4(),
+        text: 'The cortex needs fuel. Add your API key in Settings to unlock neural queries.',
+        role: ChatMessageRole.assistant,
+      ));
+      return;
+    }
+
+    final answer = await _llm.askQuestion(text, _items);
+    _isChatLoading = false;
+
+    await addChatMessage(ChatMessage(
+      id: const Uuid().v4(),
+      text: answer ?? "Signal lost. The cortex couldn't process that. Try rewording.",
+      role: ChatMessageRole.assistant,
+    ));
+  }
+
+  Future<void> clearChat() async {
+    await _db.clearChatMessages();
+    _chatMessages = [];
+    final welcome = ChatMessage(
+      id: const Uuid().v4(),
+      text: "I'm the Synapse cortex. Share links and posts from any app, "
+          "then ask me anything about them.",
+      role: ChatMessageRole.assistant,
+    );
+    await _db.insertChatMessage(welcome);
+    _chatMessages = [welcome];
+    notifyListeners();
+  }
 
   Future<String?> askQuestion(String question) async {
     return await _llm.askQuestion(question, _items);

@@ -40,7 +40,7 @@ class _SynapseAppState extends State<SynapseApp> {
     _provider.init();
 
     _shareHandler.onThoughtSaved = (thought) {
-      _provider.addThought(thought);
+      _provider.addThought(thought, fromShare: true);
     };
     _shareHandler.init();
 

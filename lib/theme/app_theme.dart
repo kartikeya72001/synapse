@@ -3,39 +3,45 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 class SynapseColors {
-  static const neuroPurple = Color(0xFF7C3AED);
-  static const neuroViolet = Color(0xFF8B5CF6);
-  static const synapseBlue = Color(0xFF3B82F6);
-  static const synapseCyan = Color(0xFF06B6D4);
-  static const cortexTeal = Color(0xFF14B8A6);
-  static const plasmaGreen = Color(0xFF10B981);
-  static const neuralPink = Color(0xFFEC4899);
+  // Primary palette — deep violet spectrum
+  static const neuroPurple = Color(0xFF6D28D9);
+  static const neuroViolet = Color(0xFF7C3AED);
+  static const synapseBlue = Color(0xFF2563EB);
+  static const synapseCyan = Color(0xFF0891B2);
+
+  // Accent palette — warm counterpoints
+  static const cortexTeal = Color(0xFF0D9488);
+  static const plasmaGreen = Color(0xFF059669);
+  static const neuralPink = Color(0xFFDB2777);
+  static const axonAmber = Color(0xFFD97706);
   static const axonOrange = Color(0xFFF59E0B);
 
-  static const darkSurface = Color(0xFF0B0B16);
-  static const darkCard = Color(0xFF14142A);
-  static const darkCardBorder = Color(0xFF222240);
-  static const darkElevated = Color(0xFF18182E);
+  // Dark surfaces — deep navy-midnight tones
+  static const darkSurface = Color(0xFF08081A);
+  static const darkCard = Color(0xFF111128);
+  static const darkCardBorder = Color(0xFF1E1E42);
+  static const darkElevated = Color(0xFF151530);
 
-  static const lightSurface = Color(0xFFF7F5FF);
+  // Light surfaces — cool lavender whites
+  static const lightSurface = Color(0xFFF5F3FF);
   static const lightCard = Color(0xFFFFFFFF);
-  static const lightCardBorder = Color(0xFFE8E4F8);
-  static const lightElevated = Color(0xFFF0EDFF);
+  static const lightCardBorder = Color(0xFFE0DAFB);
+  static const lightElevated = Color(0xFFEDE9FF);
 
   static const gradientPrimary = LinearGradient(
-    colors: [neuroPurple, synapseBlue],
+    colors: [Color(0xFF7C3AED), Color(0xFF4F46E5)],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );
 
   static const gradientAccent = LinearGradient(
-    colors: [synapseBlue, synapseCyan],
+    colors: [Color(0xFF4F46E5), Color(0xFF0891B2)],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );
 
   static const gradientWarm = LinearGradient(
-    colors: [neuroPurple, neuralPink],
+    colors: [Color(0xFF7C3AED), Color(0xFFDB2777)],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );
@@ -43,30 +49,30 @@ class SynapseColors {
   static const gradientDarkBg = LinearGradient(
     begin: Alignment.topCenter,
     end: Alignment.bottomCenter,
-    colors: [Color(0xFF0F0B1E), Color(0xFF0B0B16)],
+    colors: [Color(0xFF0C0B24), Color(0xFF08081A)],
   );
 
   static const gradientAurora = LinearGradient(
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
-    stops: [0.0, 0.4, 0.7, 1.0],
+    stops: [0.0, 0.35, 0.65, 1.0],
     colors: [
-      Color(0xFF140B2E),
-      Color(0xFF0E1030),
-      Color(0xFF0C0F28),
-      Color(0xFF100A24),
+      Color(0xFF120B28),
+      Color(0xFF0D0E2D),
+      Color(0xFF0A0C24),
+      Color(0xFF0E0920),
     ],
   );
 
   static const gradientAuroraLight = LinearGradient(
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
-    stops: [0.0, 0.4, 0.7, 1.0],
+    stops: [0.0, 0.35, 0.65, 1.0],
     colors: [
-      Color(0xFFEDE5FF),
-      Color(0xFFE3EAFF),
-      Color(0xFFE8F0FF),
-      Color(0xFFF0ECFF),
+      Color(0xFFEBE5FF),
+      Color(0xFFE0E6FF),
+      Color(0xFFE5ECFF),
+      Color(0xFFEDE8FF),
     ],
   );
 }
@@ -81,12 +87,12 @@ class GlassDecoration {
     if (isGlass) {
       return BoxDecoration(
         color: isDark
-            ? Colors.white.withValues(alpha: 0.06)
-            : Colors.white.withValues(alpha: 0.50),
+            ? Colors.white.withValues(alpha: 0.05)
+            : Colors.white.withValues(alpha: 0.55),
         borderRadius: BorderRadius.circular(radius),
         border: Border.all(
           color: isDark
-              ? Colors.white.withValues(alpha: 0.10)
+              ? Colors.white.withValues(alpha: 0.08)
               : Colors.white.withValues(alpha: 0.65),
           width: 0.5,
         ),
@@ -105,9 +111,9 @@ class GlassDecoration {
           ? null
           : [
               BoxShadow(
-                color: Colors.black.withValues(alpha: 0.04),
-                blurRadius: 10,
-                offset: const Offset(0, 2),
+                color: SynapseColors.neuroPurple.withValues(alpha: 0.04),
+                blurRadius: 16,
+                offset: const Offset(0, 4),
               ),
             ],
     );
@@ -133,7 +139,6 @@ class GlassDecoration {
   }
 }
 
-/// Wraps [child] in a frosted glass container with real blur.
 class FrostedGlass extends StatelessWidget {
   final Widget child;
   final double blur;
@@ -177,12 +182,12 @@ class FrostedGlass extends StatelessWidget {
             padding: padding,
             decoration: BoxDecoration(
               color: isDark
-                  ? Colors.white.withValues(alpha: 0.07)
-                  : Colors.white.withValues(alpha: 0.50),
+                  ? Colors.white.withValues(alpha: 0.06)
+                  : Colors.white.withValues(alpha: 0.55),
               borderRadius: BorderRadius.circular(radius),
               border: Border.all(
                 color: isDark
-                    ? Colors.white.withValues(alpha: 0.12)
+                    ? Colors.white.withValues(alpha: 0.10)
                     : Colors.white.withValues(alpha: 0.70),
                 width: 0.5,
               ),
@@ -270,7 +275,7 @@ class AppTheme {
     tertiary: SynapseColors.neuralPink,
     surface: SynapseColors.lightSurface,
     surfaceContainerHighest: SynapseColors.lightCard,
-    error: const Color(0xFFEF4444),
+    error: const Color(0xFFDC2626),
   );
 
   static final _darkColorScheme = ColorScheme.fromSeed(
@@ -281,7 +286,7 @@ class AppTheme {
     tertiary: SynapseColors.neuralPink,
     surface: SynapseColors.darkSurface,
     surfaceContainerHighest: SynapseColors.darkCard,
-    error: const Color(0xFFEF4444),
+    error: const Color(0xFFDC2626),
   );
 
   static final _glassLightColorScheme = ColorScheme.fromSeed(
@@ -292,7 +297,7 @@ class AppTheme {
     tertiary: SynapseColors.neuralPink,
     surface: const Color(0x00000000),
     surfaceContainerHighest: Colors.white.withValues(alpha: 0.55),
-    error: const Color(0xFFEF4444),
+    error: const Color(0xFFDC2626),
   );
 
   static final _glassDarkColorScheme = ColorScheme.fromSeed(
@@ -303,7 +308,7 @@ class AppTheme {
     tertiary: SynapseColors.neuralPink,
     surface: const Color(0x00000000),
     surfaceContainerHighest: Colors.white.withValues(alpha: 0.06),
-    error: const Color(0xFFEF4444),
+    error: const Color(0xFFDC2626),
   );
 
   static ThemeData lightTheme({bool glass = false}) =>
@@ -317,7 +322,7 @@ class AppTheme {
       {bool isGlass = false}) {
     final isDark = colorScheme.brightness == Brightness.dark;
     final base = isDark ? ThemeData.dark() : ThemeData.light();
-    final textTheme = GoogleFonts.plusJakartaSansTextTheme(base.textTheme);
+    final bodyFont = GoogleFonts.interTextTheme(base.textTheme);
 
     final scaffoldBg = isGlass
         ? Colors.transparent
@@ -325,7 +330,7 @@ class AppTheme {
 
     final cardColor = isGlass
         ? (isDark
-            ? Colors.white.withValues(alpha: 0.06)
+            ? Colors.white.withValues(alpha: 0.05)
             : Colors.white.withValues(alpha: 0.55))
         : (isDark ? SynapseColors.darkCard : SynapseColors.lightCard);
 
@@ -340,65 +345,66 @@ class AppTheme {
     final inputFill = isGlass
         ? (isDark
             ? Colors.white.withValues(alpha: 0.05)
-            : Colors.white.withValues(alpha: 0.4))
+            : Colors.white.withValues(alpha: 0.40))
         : (isDark
             ? Colors.white.withValues(alpha: 0.04)
-            : Colors.white.withValues(alpha: 0.9));
+            : const Color(0xFFF0EDFF));
 
     final dialogBg = isGlass
-        ? (isDark ? const Color(0xF0141425) : const Color(0xF0F0ECFF))
+        ? (isDark ? const Color(0xF0111128) : const Color(0xF0EDEAFF))
         : (isDark ? SynapseColors.darkElevated : SynapseColors.lightCard);
 
     final appBarBg = isGlass
         ? Colors.transparent
         : (isDark ? SynapseColors.darkSurface : SynapseColors.lightSurface);
 
-    final onSurface = isDark ? Colors.white : const Color(0xFF0F0F1A);
+    final onSurface = isDark ? const Color(0xFFF0F0F8) : const Color(0xFF0F0E1A);
 
     return ThemeData(
       useMaterial3: true,
       colorScheme: colorScheme.copyWith(onSurface: onSurface),
-      textTheme: textTheme.copyWith(
-        headlineLarge: GoogleFonts.spaceGrotesk(
+      textTheme: bodyFont.copyWith(
+        headlineLarge: GoogleFonts.outfit(
           fontSize: 32,
+          fontWeight: FontWeight.w700,
+          color: onSurface,
+          letterSpacing: -0.8,
+        ),
+        headlineMedium: GoogleFonts.outfit(
+          fontSize: 24,
           fontWeight: FontWeight.w700,
           color: onSurface,
           letterSpacing: -0.5,
         ),
-        headlineMedium: GoogleFonts.spaceGrotesk(
-          fontSize: 24,
-          fontWeight: FontWeight.w700,
-          color: onSurface,
-          letterSpacing: -0.3,
-        ),
-        headlineSmall: GoogleFonts.spaceGrotesk(
+        headlineSmall: GoogleFonts.outfit(
           fontSize: 20,
           fontWeight: FontWeight.w600,
           color: onSurface,
+          letterSpacing: -0.3,
         ),
-        titleLarge: GoogleFonts.plusJakartaSans(
+        titleLarge: GoogleFonts.inter(
           fontSize: 18,
           fontWeight: FontWeight.w600,
           color: onSurface,
         ),
-        bodyLarge: GoogleFonts.plusJakartaSans(
+        bodyLarge: GoogleFonts.inter(
           fontSize: 16,
           color: onSurface,
-          height: 1.5,
+          height: 1.55,
         ),
-        bodyMedium: GoogleFonts.plusJakartaSans(
+        bodyMedium: GoogleFonts.inter(
           fontSize: 14,
-          color: onSurface.withValues(alpha: 0.75),
-          height: 1.5,
+          color: onSurface.withValues(alpha: 0.72),
+          height: 1.55,
         ),
-        bodySmall: GoogleFonts.plusJakartaSans(
+        bodySmall: GoogleFonts.inter(
           fontSize: 12,
-          color: onSurface.withValues(alpha: 0.5),
+          color: onSurface.withValues(alpha: 0.48),
         ),
-        labelSmall: GoogleFonts.jetBrainsMono(
+        labelSmall: GoogleFonts.firaCode(
           fontSize: 10,
           fontWeight: FontWeight.w500,
-          color: onSurface.withValues(alpha: 0.45),
+          color: onSurface.withValues(alpha: 0.4),
           letterSpacing: 0.5,
         ),
       ),
@@ -408,11 +414,11 @@ class AppTheme {
         elevation: 0,
         scrolledUnderElevation: 0,
         centerTitle: false,
-        titleTextStyle: GoogleFonts.spaceGrotesk(
+        titleTextStyle: GoogleFonts.outfit(
           fontSize: 24,
           fontWeight: FontWeight.w700,
           color: onSurface,
-          letterSpacing: -0.3,
+          letterSpacing: -0.5,
         ),
         iconTheme: IconThemeData(color: onSurface),
       ),
@@ -430,7 +436,7 @@ class AppTheme {
                 ? Colors.white.withValues(alpha: 0.06)
                 : Colors.white.withValues(alpha: 0.5))
             : colorScheme.primary.withValues(alpha: 0.08),
-        labelStyle: GoogleFonts.plusJakartaSans(
+        labelStyle: GoogleFonts.inter(
           fontSize: 12,
           fontWeight: FontWeight.w600,
           color: colorScheme.primary,
@@ -461,15 +467,15 @@ class AppTheme {
         filled: true,
         fillColor: inputFill,
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(14),
           borderSide: BorderSide(color: cardBorderColor, width: 0.5),
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(14),
           borderSide: BorderSide(color: cardBorderColor, width: 0.5),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(14),
           borderSide: BorderSide(color: colorScheme.primary, width: 1.5),
         ),
         contentPadding:
@@ -484,21 +490,22 @@ class AppTheme {
       dialogTheme: DialogThemeData(
         backgroundColor: dialogBg,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(22),
         ),
         elevation: isGlass ? 0 : 4,
       ),
       snackBarTheme: SnackBarThemeData(
         behavior: SnackBarBehavior.floating,
         backgroundColor: isDark
-            ? const Color(0xFF1A1A30)
+            ? const Color(0xFF1A1A35)
             : const Color(0xFF1E1B4B),
-        contentTextStyle: GoogleFonts.plusJakartaSans(
+        contentTextStyle: GoogleFonts.inter(
           fontSize: 14,
           color: Colors.white,
+          fontWeight: FontWeight.w500,
         ),
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(14),
         ),
         elevation: isGlass ? 0 : 4,
       ),
@@ -506,9 +513,9 @@ class AppTheme {
         style: FilledButton.styleFrom(
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(14),
           ),
-          textStyle: GoogleFonts.plusJakartaSans(
+          textStyle: GoogleFonts.inter(
             fontSize: 14,
             fontWeight: FontWeight.w600,
           ),
@@ -518,7 +525,7 @@ class AppTheme {
         style: OutlinedButton.styleFrom(
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(14),
           ),
           side: BorderSide(
             color: isGlass
@@ -528,7 +535,7 @@ class AppTheme {
                 : colorScheme.primary.withValues(alpha: 0.25),
             width: 0.5,
           ),
-          textStyle: GoogleFonts.plusJakartaSans(
+          textStyle: GoogleFonts.inter(
             fontSize: 14,
             fontWeight: FontWeight.w600,
           ),
@@ -536,7 +543,7 @@ class AppTheme {
       ),
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
-          textStyle: GoogleFonts.plusJakartaSans(
+          textStyle: GoogleFonts.inter(
             fontSize: 14,
             fontWeight: FontWeight.w600,
           ),

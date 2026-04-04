@@ -26,6 +26,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   int _remainingCalls = 0;
   int? _autoDeleteDays;
   bool _isExporting = false;
+  bool _backgroundShare = false;
 
   static const List<int?> _autoDeletePresets = [null, 7, 15, 30, 90, 180, 365];
 
@@ -44,6 +45,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final openaiKey = prefs.getString(AppConstants.openaiApiKeyPref) ?? '';
     final remaining = await synapseProvider.getRemainingFreeCalls();
     final autoDelete = prefs.getInt(AppConstants.autoDeleteDaysPref);
+    final bgShare = prefs.getBool(AppConstants.backgroundSharePref) ?? false;
 
     if (!mounted) return;
 
@@ -53,6 +55,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _openaiKeyController.text = openaiKey;
       _remainingCalls = remaining;
       _autoDeleteDays = autoDelete;
+      _backgroundShare = bgShare;
     });
   }
 
@@ -112,6 +115,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
           _buildSectionTitle(theme, 'Auto-Delete'),
           const SizedBox(height: 12),
           _buildAutoDeleteSelector(theme, colorScheme),
+          const SizedBox(height: 32),
+          _buildSectionTitle(theme, 'Sharing'),
+          const SizedBox(height: 12),
+          _buildBackgroundShareToggle(theme, colorScheme),
           const SizedBox(height: 32),
           _buildSectionTitle(theme, 'Neural Engine'),
           const SizedBox(height: 12),
@@ -382,6 +389,38 @@ class _SettingsScreenState extends State<SettingsScreen> {
             }).toList(),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildBackgroundShareToggle(ThemeData theme, ColorScheme colorScheme) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: colorScheme.outlineVariant.withValues(alpha: 0.2),
+        ),
+      ),
+      child: SwitchListTile.adaptive(
+        contentPadding: EdgeInsets.zero,
+        title: Text('Process in background',
+            style: theme.textTheme.bodyMedium
+                ?.copyWith(fontWeight: FontWeight.w600)),
+        subtitle: Text(
+          'Save shared links without opening the app',
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: colorScheme.onSurface.withValues(alpha: 0.5),
+          ),
+        ),
+        value: _backgroundShare,
+        activeColor: colorScheme.primary,
+        onChanged: (val) async {
+          setState(() => _backgroundShare = val);
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setBool(AppConstants.backgroundSharePref, val);
+        },
       ),
     );
   }

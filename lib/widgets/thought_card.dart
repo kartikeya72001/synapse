@@ -70,15 +70,19 @@ class ThoughtCard extends StatelessWidget {
                     : SynapseColors.lightCardBorder,
                 width: 0.5,
               ),
-              boxShadow: isDark
-                  ? null
-                  : [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.04),
-                        blurRadius: 8,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
+              boxShadow: [
+                BoxShadow(
+                  color: SynapseColors.neuroPurple
+                      .withValues(alpha: isDark ? 0.08 : 0.05),
+                  blurRadius: 16,
+                  offset: const Offset(0, 4),
+                ),
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.04),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
             ),
       clipBehavior: Clip.antiAlias,
       child: card,
@@ -317,12 +321,19 @@ class _MetaRow extends StatelessWidget {
     return Row(
       children: [
         if (hasCat) ...[
-          Text(
-            '${thought.category.emoji} ${thought.category.label}',
-            style: TextStyle(
-              fontSize: 10,
-              fontWeight: FontWeight.w600,
-              color: SynapseColors.neuroPurple.withValues(alpha: 0.6),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            decoration: BoxDecoration(
+              color: SynapseColors.neuroPurple.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Text(
+              '${thought.category.emoji} ${thought.category.label}',
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w600,
+                color: SynapseColors.neuroPurple.withValues(alpha: 0.7),
+              ),
             ),
           ),
           _dot(muted),

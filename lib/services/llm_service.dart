@@ -11,7 +11,7 @@ enum LlmProvider { gemini, openai }
 
 class LlmService {
   static const _geminiBaseUrl =
-      'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite-preview:generateContent';
+      'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash:generateContent';
   static const _openaiBaseUrl = 'https://api.openai.com/v1/chat/completions';
 
   String? _lastError;
@@ -77,8 +77,7 @@ class LlmService {
     if (!await canMakeClassificationCall()) return null;
 
     final prompt = _buildBatchLinkPrompt(items);
-    // ~400 tokens per item for markdown output
-    final maxTokens = (items.length * 400).clamp(1200, 8000);
+    final maxTokens = (items.length * 600).clamp(1500, 12000);
     final text = await _callLlmRaw(prompt, maxTokens: maxTokens);
     if (text == null) return null;
 
@@ -141,25 +140,275 @@ class LlmService {
       if (item.url != null) parts.add('URL: ${item.url}');
       if (item.description != null) parts.add('Description: ${item.description}');
       if (item.llmSummary != null) parts.add('Summary: ${item.llmSummary}');
-      if (item.extractedInfo != null) parts.add('Extracted: ${item.extractedInfo}');
+      if (item.extractedInfo != null) parts.add('Details: ${item.extractedInfo}');
+      if (item.ocrText != null) parts.add('OCR Text: ${item.ocrText}');
       if (item.tags.isNotEmpty) parts.add('Tags: ${item.tags.join(", ")}');
       parts.add('Category: ${item.category.label}');
       return parts.join('\n');
     }).join('\n---\n');
 
-    final prompt = '''You are Synapse, a personal knowledge assistant. The user has saved various 
-links and screenshots. Answer their question based ONLY on the thoughts provided below.
-If the answer isn't in the thoughts, say so honestly.
+    final prompt = '''You are Synapse, a knowledgeable personal assistant. 
+Answer the user's question using the context below. Respond naturally and 
+conversationally — never mention that you are looking at "saved items", 
+"thoughts", or a "knowledge base". Just answer as if you inherently know 
+the information. Use markdown formatting for readability (headers, bullets, 
+bold, etc.) when helpful.
 
-THOUGHTS:
+IMPORTANT: Search through ALL context items carefully. Information may 
+appear in titles, descriptions, summaries, extracted details, or OCR text.
+Names, places, products, and specific details may be mentioned in any field.
+Match partial names and related terms — e.g. "herbivore cafe" should match 
+"Truly Herbivore Restaurant".
+
+If the context doesn't contain relevant information, say you don't have 
+enough information on that topic yet.
+
+CONTEXT:
 $contextStr
 
-USER QUESTION: $question
-
-Provide a concise, helpful answer.''';
+QUESTION: $question''';
 
     final text = await _callLlmRaw(prompt);
     return text;
+  }
+
+  // ── Video / Audio Transcription ──
+
+  Future<String?> transcribeMedia(String filePath) async {
+    if (!await hasApiKey()) {
+      _lastError = 'No API key configured.';
+      return null;
+    }
+
+    final file = File(filePath);
+    if (!await file.exists()) {
+      _lastError = 'Media file not found.';
+      return null;
+    }
+
+    final fileSize = await file.length();
+    if (fileSize > 20 * 1024 * 1024) {
+      _lastError = 'File too large for inline processing (>20MB).';
+      return null;
+    }
+
+    final provider = await _getActiveProvider();
+    final apiKey = await _getApiKey(provider);
+    if (apiKey == null || apiKey.isEmpty) return null;
+
+    final bytes = await file.readAsBytes();
+    final base64Data = base64Encode(bytes);
+    final ext = filePath.split('.').last.toLowerCase();
+    final mimeType = _mediaMimeType(ext);
+
+    const prompt = '''Transcribe all spoken words in this media file verbatim. 
+Also briefly describe the visual content (what is shown, any text overlays, 
+locations, food, products, etc.). 
+
+Format:
+TRANSCRIPT: <verbatim speech>
+VISUAL: <brief description of what is shown>''';
+
+    try {
+      if (provider == LlmProvider.gemini) {
+        return await _callGeminiWithMediaRaw(
+          apiKey, prompt, base64Data, mimeType,
+        );
+      }
+      // OpenAI doesn't support arbitrary media — fall back to text-only
+      _lastError = 'Video transcription requires Gemini API.';
+      return null;
+    } catch (e) {
+      _lastError = _friendlyError(e);
+      debugPrint('Synapse media transcription error: $e');
+      return null;
+    }
+  }
+
+  String _mediaMimeType(String ext) {
+    switch (ext) {
+      case 'mp4':
+        return 'video/mp4';
+      case 'webm':
+        return 'video/webm';
+      case 'mov':
+        return 'video/quicktime';
+      case 'avi':
+        return 'video/x-msvideo';
+      case 'mp3':
+        return 'audio/mp3';
+      case 'wav':
+        return 'audio/wav';
+      case 'ogg':
+        return 'audio/ogg';
+      case 'm4a':
+        return 'audio/mp4';
+      case 'aac':
+        return 'audio/aac';
+      default:
+        return 'video/mp4';
+    }
+  }
+
+  Future<String?> _callGeminiWithMediaRaw(
+    String apiKey,
+    String prompt,
+    String base64Data,
+    String mimeType,
+  ) async {
+    final url = '$_geminiBaseUrl?key=$apiKey';
+    final body = jsonEncode({
+      'contents': [
+        {
+          'parts': [
+            {'text': prompt},
+            {
+              'inline_data': {
+                'mime_type': mimeType,
+                'data': base64Data,
+              },
+            },
+          ],
+        },
+      ],
+      'generationConfig': {
+        'temperature': 0.2,
+        'maxOutputTokens': 2000,
+      },
+    });
+
+    return _callWithRetry(
+      () => http.post(
+        Uri.parse(url),
+        headers: {'Content-Type': 'application/json'},
+        body: body,
+      ).timeout(const Duration(seconds: 120)),
+      _extractGeminiText,
+    );
+  }
+
+  // ── Deep Content Extraction (social media posts) ──
+
+  /// Extracts ALL visible information from a post image and returns both
+  /// classification data and a comprehensive text dump for Q&A.
+  Future<Map<String, dynamic>?> extractAndClassifyPost(
+    Thought item,
+    Uint8List imageBytes,
+  ) async {
+    if (!await hasApiKey()) return null;
+
+    final provider = await _getActiveProvider();
+    final apiKey = await _getApiKey(provider);
+    if (apiKey == null || apiKey.isEmpty) return null;
+
+    final base64Image = base64Encode(imageBytes);
+
+    final prompt = StringBuffer();
+    prompt.writeln('You are analyzing a social media post. Your job is to extract EVERY piece of information.');
+    prompt.writeln();
+    prompt.writeln('CRITICAL INSTRUCTIONS:');
+    prompt.writeln('1. Read ALL text visible in the image — overlays, captions, watermarks, signs, menus, labels, ratings, prices.');
+    prompt.writeln('2. Identify ALL named entities — restaurant names, place names, brand names, usernames, product names.');
+    prompt.writeln('3. Extract ALL numbers — ratings (e.g. 9/10), prices, quantities, dates, phone numbers, addresses.');
+    prompt.writeln('4. Describe what is visually shown — food items, locations, products, people, activities.');
+    prompt.writeln('5. Capture recommendations, tips, reviews, or opinions expressed.');
+    prompt.writeln();
+    if (item.url != null) prompt.writeln('Post URL: ${item.url}');
+    if (item.title != null) prompt.writeln('Title: ${item.title}');
+    if (item.description != null) {
+      final desc = item.description!.length > 800
+          ? '${item.description!.substring(0, 800)}...'
+          : item.description!;
+      prompt.writeln('Caption: $desc');
+    }
+    if (item.siteName != null) prompt.writeln('Platform: ${item.siteName}');
+    prompt.writeln();
+    prompt.writeln('OUTPUT FORMAT:');
+    prompt.writeln('CATEGORY: <category>');
+    prompt.writeln('TAGS: <tags>');
+    prompt.writeln('TITLE: <descriptive title>');
+    prompt.writeln('URL: none');
+    prompt.writeln();
+    prompt.writeln('Then write a COMPREHENSIVE extraction with:');
+    prompt.writeln('- Every name, place, product, and recommendation mentioned');
+    prompt.writeln('- All text overlays verbatim');
+    prompt.writeln('- All ratings, prices, and specific details');
+    prompt.writeln('- Description of visual content');
+    prompt.writeln('- Be thorough — the user should be able to recall ANY detail from this post by reading your output alone.');
+
+    try {
+      String? text;
+      if (provider == LlmProvider.gemini) {
+        text = await _callGeminiWithImageRaw(apiKey, prompt.toString(), base64Image);
+      } else {
+        text = await _callOpenaiWithImageRaw(apiKey, prompt.toString(), base64Image);
+      }
+      if (text == null) return null;
+      await _incrementCallCount();
+      return _parseStructuredResponse(text);
+    } catch (e) {
+      _lastError = _friendlyError(e);
+      debugPrint('Synapse deep extraction error: $e');
+      return null;
+    }
+  }
+
+  // ── Link Classification with Preview Image ──
+
+  Future<Map<String, dynamic>?> classifyLinkWithImage(
+    Thought item,
+    Uint8List imageBytes,
+  ) async {
+    if (!await hasApiKey()) return null;
+
+    final provider = await _getActiveProvider();
+    final apiKey = await _getApiKey(provider);
+    if (apiKey == null || apiKey.isEmpty) return null;
+
+    final base64Image = base64Encode(imageBytes);
+    final prompt = _buildSingleLinkWithImagePrompt(item);
+
+    try {
+      String? text;
+      if (provider == LlmProvider.gemini) {
+        text = await _callGeminiWithImageRaw(apiKey, prompt, base64Image);
+      } else {
+        text = await _callOpenaiWithImageRaw(apiKey, prompt, base64Image);
+      }
+      if (text == null) return null;
+      await _incrementCallCount();
+      return _parseStructuredResponse(text);
+    } catch (e) {
+      _lastError = _friendlyError(e);
+      debugPrint('Synapse LLM vision classification error: $e');
+      return null;
+    }
+  }
+
+  String _buildSingleLinkWithImagePrompt(Thought item) {
+    final sb = StringBuffer();
+    sb.writeln('Analyze this post image thoroughly. Read ALL text visible in the image.');
+    sb.writeln();
+    sb.writeln('You MUST:');
+    sb.writeln('- Read every text overlay, watermark, label, sign, menu item, rating');
+    sb.writeln('- Identify all named entities (restaurant/store/brand names, place names, usernames)');
+    sb.writeln('- Extract all numbers (ratings, prices, quantities, phone numbers)');
+    sb.writeln('- Describe specific visual content (food dishes, products, locations)');
+    sb.writeln('- Capture any recommendations, tips, or reviews');
+    sb.writeln();
+    if (item.url != null) sb.writeln('Post URL: ${item.url}');
+    if (item.title != null) sb.writeln('Title: ${item.title}');
+    if (item.description != null) {
+      final desc = item.description!.length > 500
+          ? '${item.description!.substring(0, 500)}...'
+          : item.description!;
+      sb.writeln('Caption: $desc');
+    }
+    if (item.siteName != null) sb.writeln('Platform: ${item.siteName}');
+    sb.writeln();
+    sb.writeln('Output exactly 1 item. Do NOT include "=== ITEM ===" headers.');
+    sb.writeln('Be comprehensive — the user should be able to recall ANY detail from this post.');
+    return sb.toString();
   }
 
   // ── Prompts ──
@@ -168,38 +417,42 @@ Provide a concise, helpful answer.''';
 
   static const _categoryList = 'article, socialMedia, video, image, recipe, product, news, reference, inspiration, todo, game, family, entertainment, music, tool, vacation, sports, stocks, education, health, finance, travel, other';
 
-  static const _systemInstruction = '''You are Synapse, a classification engine for saved links and screenshots. Your job is to categorize, tag, and summarize each item.
+  static const _systemInstruction = '''You are Synapse, a classification and knowledge-extraction engine for saved links, posts, and screenshots.
 
-RULES (always follow):
-- Be factual and concise. Do NOT guess, speculate, or pad with filler.
-- Only state what you know for certain or can actually see.
-- Keep each item under 80 words.
-- Do NOT invent details you are unsure about.
-- Do NOT repeat the title or URL in the body.
-- Do NOT describe obvious things ("this is a screenshot", "the image shows").
-- No generic commentary like "this is a great resource".
+Your goals:
+1. Categorize and tag the item.
+2. Extract ALL useful, specific information — names, places, prices, dates, recommendations, ingredients, steps, products, tips, etc.
+3. Produce a rich summary that captures every concrete detail so the user never needs to revisit the original.
+
+RULES:
+- Be factual. Do NOT invent details.
+- Extract SPECIFIC data: names of places/products/people, prices, addresses, ratings, quantities, steps, ingredients — anything concrete.
+- Do NOT repeat the title or URL verbatim in the body.
+- Do NOT use filler like "this is a great resource" or "the image shows".
+- Use markdown: headers, bold for key terms, bullet lists, numbered lists where appropriate.
+- For social media posts (Instagram, TikTok, etc.): capture the full message/caption meaning plus any visual content (food, locations, products shown).
+- Aim for 100-250 words of substantive analysis per item.
 
 VALID CATEGORIES: $_categoryList
 
 OUTPUT FORMAT (per item):
-=== ITEM N ===
 CATEGORY: <one of the valid categories>
-TAGS: <up to 5 comma-separated single-word tags>
-TITLE: <short descriptive title>
-URL: <if a URL is visible/applicable, write it; otherwise "none">
+TAGS: <up to 7 comma-separated tags>
+TITLE: <descriptive title>
+URL: <if a URL is visible; otherwise "none">
 
-<2-4 bullet points in markdown with VERIFIED facts only>''';
+<Detailed markdown summary with ALL extracted specifics>''';
 
   String _buildBatchLinkPrompt(List<Thought> items) {
     final itemsBlock = StringBuffer();
     for (int i = 0; i < items.length; i++) {
       final item = items[i];
-      itemsBlock.writeln('=== ITEM ${i + 1} ===');
+      itemsBlock.writeln('--- INPUT ${i + 1} ---');
       if (item.url != null) itemsBlock.writeln('URL: ${item.url}');
       if (item.title != null) itemsBlock.writeln('Title: ${item.title}');
       if (item.description != null) {
-        final desc = item.description!.length > 200
-            ? '${item.description!.substring(0, 200)}...'
+        final desc = item.description!.length > 500
+            ? '${item.description!.substring(0, 500)}...'
             : item.description!;
         itemsBlock.writeln('Description: $desc');
       }
@@ -208,12 +461,16 @@ URL: <if a URL is visible/applicable, write it; otherwise "none">
     }
 
     return '''Classify each link below. Output exactly ${items.length} items.
+Separate each output item with "=== ITEM N ===" headers.
+Extract ALL specific details — names, places, prices, tips, etc.
 
 ${itemsBlock.toString().trim()}''';
   }
 
   String _buildScreenshotPrompt() {
-    return 'Analyze this screenshot. Output exactly 1 item following the format.';
+    return '''Analyze this screenshot thoroughly. Extract ALL text, data, names, 
+numbers, and specific details visible. Output exactly 1 item. 
+Do NOT include "=== ITEM ===" headers.''';
   }
 
   // ── Response Parsing ──
@@ -222,6 +479,8 @@ ${itemsBlock.toString().trim()}''';
   static final _tagsRegex = RegExp(r'^TAGS:\s*(.+)$', multiLine: true);
   static final _titleRegex = RegExp(r'^TITLE:\s*(.+)$', multiLine: true);
   static final _urlRegex = RegExp(r'^URL:\s*(.+)$', multiLine: true);
+
+  static final _itemHeaderRegex = RegExp(r'^\s*={2,}\s*ITEM\s*\d*\s*={2,}\s*$');
 
   Map<String, dynamic>? _parseStructuredResponse(String text) {
     final categoryMatch = _categoryRegex.firstMatch(text);
@@ -240,24 +499,26 @@ ${itemsBlock.toString().trim()}''';
     final title = titleMatch?.group(1)?.trim();
     final url = urlMatch?.group(1)?.trim();
 
-    // Extract markdown body: everything after the header block
-    var markdown = text;
-    // Remove the header lines
+    // Strip all metadata lines and keep only the markdown body
     final lines = text.split('\n');
-    int bodyStart = 0;
-    for (int i = 0; i < lines.length; i++) {
-      final line = lines[i].trim();
-      if (line.startsWith('CATEGORY:') ||
-          line.startsWith('TAGS:') ||
-          line.startsWith('TITLE:') ||
-          line.startsWith('URL:') ||
-          line.isEmpty) {
-        bodyStart = i + 1;
-      } else {
-        break;
-      }
+    final bodyLines = <String>[];
+    for (final line in lines) {
+      final trimmed = line.trim();
+      if (_itemHeaderRegex.hasMatch(trimmed)) continue;
+      if (trimmed.startsWith('CATEGORY:')) continue;
+      if (trimmed.startsWith('TAGS:')) continue;
+      if (trimmed.startsWith('TITLE:')) continue;
+      if (trimmed.startsWith('URL:')) continue;
+      bodyLines.add(line);
     }
-    markdown = lines.skip(bodyStart).join('\n').trim();
+    // Remove leading/trailing blank lines from body
+    while (bodyLines.isNotEmpty && bodyLines.first.trim().isEmpty) {
+      bodyLines.removeAt(0);
+    }
+    while (bodyLines.isNotEmpty && bodyLines.last.trim().isEmpty) {
+      bodyLines.removeLast();
+    }
+    final markdown = bodyLines.join('\n').trim();
 
     return {
       'category': _normalizeCategory(category),
@@ -415,7 +676,7 @@ ${itemsBlock.toString().trim()}''';
   ) async {
     final url = '$_geminiBaseUrl?key=$apiKey';
     final body = jsonEncode(
-      _geminiBody(prompt: prompt, base64Image: base64Image, maxTokens: 1500),
+      _geminiBody(prompt: prompt, base64Image: base64Image, maxTokens: 3000),
     );
 
     return _callWithRetry(
