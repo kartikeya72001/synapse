@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'providers/synapse_provider.dart';
 import 'screens/home_screen.dart';
 import 'screens/splash_screen.dart';
+import 'services/debug_logger.dart';
 import 'services/share_handler_service.dart';
 import 'theme/app_theme.dart';
 import 'utils/constants.dart';
@@ -38,6 +39,7 @@ class _SynapseAppState extends State<SynapseApp> {
     super.initState();
     _provider = SynapseProvider();
     _provider.init();
+    DebugLogger.instance.loadPreference();
 
     _shareHandler.onThoughtSaved = (thought) {
       _provider.addThought(thought, fromShare: true);

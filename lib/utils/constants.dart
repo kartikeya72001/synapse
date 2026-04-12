@@ -13,6 +13,7 @@ class AppConstants {
   static const String qsTilePromptedPref = 'qs_tile_prompted';
   static const String galleryImportPromptedPref = 'gallery_import_prompted';
   static const String backgroundSharePref = 'background_share';
+  static const String debugLogPref = 'debug_log_enabled';
 
   static const int maxFreeLlmCalls = 2;
 
