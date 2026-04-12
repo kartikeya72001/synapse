@@ -354,7 +354,9 @@ class _MetaRow extends StatelessWidget {
           ),
         if (thought.isClassified)
           Icon(Icons.auto_awesome_rounded,
-              size: 12, color: SynapseColors.neuroPurple.withValues(alpha: 0.4)),
+              size: 12, color: SynapseColors.neuroPurple.withValues(alpha: 0.4))
+        else if (thought.type == ThoughtType.link)
+          _WiringIndicator(),
       ],
     );
   }
@@ -363,4 +365,21 @@ class _MetaRow extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 5),
         child: Text('·', style: TextStyle(color: c, fontSize: 10)),
       );
+}
+
+class _WiringIndicator extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: 'Wiring pending',
+      child: SizedBox(
+        width: 12,
+        height: 12,
+        child: CircularProgressIndicator(
+          strokeWidth: 1.5,
+          color: SynapseColors.neuroPurple.withValues(alpha: 0.5),
+        ),
+      ),
+    );
+  }
 }

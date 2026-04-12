@@ -65,13 +65,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   @override
   void dispose() {
-    _persistKeys();
+    // Capture everything synchronously before async gap / controller disposal
+    final gemini = _geminiKeyController.text.trim();
+    final openai = _openaiKeyController.text.trim();
+    final providerName = _selectedProvider.name;
+    final synapseProvider = context.read<SynapseProvider>();
+    _persistKeys(gemini, openai, providerName, synapseProvider);
     _geminiKeyController.dispose();
     _openaiKeyController.dispose();
     super.dispose();
   }
 
-  Future<void> _persistKeys() async {
+  /// Lightweight save triggered on every keystroke — no reindex.
+  Future<void> _persistKeysQuiet() async {
     final prefs = await SharedPreferences.getInstance();
     final gemini = _geminiKeyController.text.trim();
     final openai = _openaiKeyController.text.trim();
@@ -82,6 +88,29 @@ class _SettingsScreenState extends State<SettingsScreen> {
       await prefs.setString(AppConstants.openaiApiKeyPref, openai);
     }
     await prefs.setString(AppConstants.llmProviderPref, _selectedProvider.name);
+  }
+
+  /// Full save on dispose — also triggers reindex if key changed.
+  Future<void> _persistKeys(
+    String gemini,
+    String openai,
+    String providerName,
+    SynapseProvider synapseProvider,
+  ) async {
+    final prefs = await SharedPreferences.getInstance();
+    final oldGeminiKey = prefs.getString(AppConstants.geminiApiKeyPref) ?? '';
+    if (gemini.isNotEmpty) {
+      await prefs.setString(AppConstants.geminiApiKeyPref, gemini);
+    }
+    if (openai.isNotEmpty) {
+      await prefs.setString(AppConstants.openaiApiKeyPref, openai);
+    }
+    await prefs.setString(AppConstants.llmProviderPref, providerName);
+
+    if (gemini.isNotEmpty && gemini != oldGeminiKey) {
+      synapseProvider.reindexEmbeddings();
+      synapseProvider.retryFailedWirings();
+    }
   }
 
   @override
@@ -597,7 +626,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               onPressed: onToggle,
             ),
           ),
-          onChanged: (_) => _persistKeys(),
+          onChanged: (_) => _persistKeysQuiet(),
         ),
       ],
     );
@@ -877,7 +906,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<void> _saveSettings() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(AppConstants.geminiApiKeyPref, _geminiKeyController.text.trim());
+    final oldGeminiKey = prefs.getString(AppConstants.geminiApiKeyPref) ?? '';
+    final newGeminiKey = _geminiKeyController.text.trim();
+
+    await prefs.setString(AppConstants.geminiApiKeyPref, newGeminiKey);
     await prefs.setString(AppConstants.openaiApiKeyPref, _openaiKeyController.text.trim());
     await prefs.setString(AppConstants.llmProviderPref, _selectedProvider.name);
 
@@ -885,6 +917,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
       await prefs.remove(AppConstants.autoDeleteDaysPref);
     } else {
       await prefs.setInt(AppConstants.autoDeleteDaysPref, _autoDeleteDays!);
+    }
+
+    if (newGeminiKey.isNotEmpty && newGeminiKey != oldGeminiKey && mounted) {
+      final provider = context.read<SynapseProvider>();
+      provider.reindexEmbeddings();
+      provider.retryFailedWirings();
     }
 
     if (mounted) {

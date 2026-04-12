@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
 import '../models/thought.dart';
@@ -7,6 +8,7 @@ class DatabaseService {
   static Database? _database;
   static const String _tableName = 'thoughts';
   static const String _chatTable = 'chat_messages';
+  static const String _embeddingsTable = 'embeddings';
 
   Future<Database> get database async {
     if (_database != null) return _database!;
@@ -15,6 +17,16 @@ class DatabaseService {
   }
 
   Future<Database> exposeDatabase() async => database;
+
+  static const String _createEmbeddingsTableSql = '''
+    CREATE TABLE IF NOT EXISTS $_embeddingsTable (
+      thoughtId TEXT PRIMARY KEY,
+      vector TEXT NOT NULL,
+      textHash TEXT NOT NULL,
+      createdAt TEXT NOT NULL,
+      FOREIGN KEY (thoughtId) REFERENCES thoughts(id) ON DELETE CASCADE
+    )
+  ''';
 
   static const String _createChatTableSql = '''
     CREATE TABLE IF NOT EXISTS $_chatTable (
@@ -32,7 +44,7 @@ class DatabaseService {
 
     return await openDatabase(
       path,
-      version: 4,
+      version: 6,
       onCreate: (db, version) async {
         await db.execute('''
           CREATE TABLE $_tableName (
@@ -78,6 +90,7 @@ class DatabaseService {
           )
         ''');
         await db.execute(_createChatTableSql);
+        await db.execute(_createEmbeddingsTableSql);
       },
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 2) {
@@ -125,6 +138,12 @@ class DatabaseService {
         }
         if (oldVersion < 4) {
           await db.execute(_createChatTableSql);
+        }
+        if (oldVersion < 5) {
+          await db.execute(_createEmbeddingsTableSql);
+        }
+        if (oldVersion < 6) {
+          await db.delete(_embeddingsTable);
         }
       },
     );
@@ -233,5 +252,70 @@ class DatabaseService {
   Future<void> clearChatMessages() async {
     final db = await database;
     await db.delete(_chatTable);
+  }
+
+  // ── Embeddings ──
+
+  Future<void> upsertEmbedding(
+    String thoughtId,
+    List<double> vector,
+    String textHash,
+  ) async {
+    final db = await database;
+    await db.insert(
+      _embeddingsTable,
+      {
+        'thoughtId': thoughtId,
+        'vector': jsonEncode(vector),
+        'textHash': textHash,
+        'createdAt': DateTime.now().toIso8601String(),
+      },
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  Future<Map<String, List<double>>> getAllEmbeddings() async {
+    final db = await database;
+    final maps = await db.query(_embeddingsTable);
+    final result = <String, List<double>>{};
+    for (final row in maps) {
+      final id = row['thoughtId'] as String;
+      final vectorJson = row['vector'] as String;
+      final vector = (jsonDecode(vectorJson) as List)
+          .map((v) => (v as num).toDouble())
+          .toList();
+      result[id] = vector;
+    }
+    return result;
+  }
+
+  Future<String?> getEmbeddingHash(String thoughtId) async {
+    final db = await database;
+    final maps = await db.query(
+      _embeddingsTable,
+      columns: ['textHash'],
+      where: 'thoughtId = ?',
+      whereArgs: [thoughtId],
+    );
+    if (maps.isEmpty) return null;
+    return maps.first['textHash'] as String?;
+  }
+
+  Future<Set<String>> getEmbeddedThoughtIds() async {
+    final db = await database;
+    final maps = await db.query(
+      _embeddingsTable,
+      columns: ['thoughtId'],
+    );
+    return maps.map((m) => m['thoughtId'] as String).toSet();
+  }
+
+  Future<void> deleteEmbedding(String thoughtId) async {
+    final db = await database;
+    await db.delete(
+      _embeddingsTable,
+      where: 'thoughtId = ?',
+      whereArgs: [thoughtId],
+    );
   }
 }

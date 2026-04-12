@@ -6,15 +6,11 @@ class ChatMessage {
   final ChatMessageRole role;
   final DateTime timestamp;
 
-  /// Optional reference to a thought (e.g. when a memory is absorbed).
-  final String? thoughtId;
-
   ChatMessage({
     required this.id,
     required this.text,
     required this.role,
     DateTime? timestamp,
-    this.thoughtId,
   }) : timestamp = timestamp ?? DateTime.now();
 
   bool get isUser => role == ChatMessageRole.user;
@@ -26,7 +22,6 @@ class ChatMessage {
       'id': id,
       'text': text,
       'role': role.name,
-      'thoughtId': thoughtId,
       'timestamp': timestamp.toIso8601String(),
     };
   }
@@ -39,7 +34,6 @@ class ChatMessage {
         (e) => e.name == map['role'],
         orElse: () => ChatMessageRole.assistant,
       ),
-      thoughtId: map['thoughtId'] as String?,
       timestamp: DateTime.parse(map['timestamp'] as String),
     );
   }

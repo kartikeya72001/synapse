@@ -38,15 +38,15 @@ class DebugLogger {
   }
 
   void log(String step, String message) {
+    debugPrint('Synapse [$step] $message');
     if (!_enabled) return;
     _log('[$step] $message');
-    debugPrint('DBG [$step] $message');
   }
 
   void logError(String step, Object error) {
+    debugPrint('Synapse [$step] ERROR: $error');
     if (!_enabled) return;
     _log('[$step] ❌ ERROR: $error');
-    debugPrint('DBG [$step] ERROR: $error');
   }
 
   void _log(String line) {

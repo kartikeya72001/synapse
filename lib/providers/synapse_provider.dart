@@ -1,5 +1,4 @@
 import 'package:flutter/foundation.dart';
-import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 import '../models/thought.dart';
@@ -8,8 +7,12 @@ import '../models/chat_message.dart';
 import '../services/database_service.dart';
 import '../services/group_service.dart';
 import '../services/llm_service.dart';
+import '../services/classification_service.dart';
 import '../services/dead_link_service.dart';
+import '../services/vector_search_service.dart';
 import '../utils/constants.dart';
+import '../utils/url_utils.dart' as url_utils;
+import '../services/debug_logger.dart';
 
 enum AppThemeMode { system, light, dark }
 enum AppVisualStyle { materialYou, materialGlass }
@@ -32,7 +35,21 @@ class SynapseProvider extends ChangeNotifier {
   final DatabaseService _db = DatabaseService();
   final LlmService _llm = LlmService();
   final DeadLinkService _deadLinkService = DeadLinkService();
+  final VectorSearchService _vectorSearch = VectorSearchService();
+  final _dbg = DebugLogger.instance;
   late final GroupService _groupService;
+  late final ClassificationService _classification;
+
+  void setWiringChecker(bool Function(String) checker) {
+    _classification.isWiringInProgress = checker;
+  }
+
+  void setCarouselFetcher(Future<List<Uint8List>> Function(String) fetcher) {
+    _classification.fetchCarouselImages = fetcher;
+  }
+
+  bool _isIndexing = false;
+  bool get isIndexing => _isIndexing;
 
   List<Thought> _items = [];
   List<Thought> _filteredItems = [];
@@ -69,6 +86,7 @@ class SynapseProvider extends ChangeNotifier {
 
   SynapseProvider() {
     _groupService = GroupService(() => _db.database);
+    _classification = ClassificationService(_llm);
   }
 
   List<Thought> get items =>
@@ -109,6 +127,35 @@ class SynapseProvider extends ChangeNotifier {
     await loadChatMessages();
     _purgeExpiredThoughts();
     _checkDeadLinksIfNeeded();
+    _indexEmbeddingsInBackground();
+    _retryFailedWirings();
+  }
+
+  /// Re-processes unclassified social-media thoughts.
+  Future<void> retryFailedWirings() => _retryFailedWirings();
+
+  Future<void> _retryFailedWirings() async {
+    await Future.delayed(const Duration(seconds: 5));
+
+    final unclassifiedSocial = _items.where((t) =>
+        !t.isClassified &&
+        t.url != null &&
+        url_utils.isSocialMediaUrl(t.url!)).toList();
+
+    if (unclassifiedSocial.isEmpty) return;
+
+    _dbg.log('RETRY', '${unclassifiedSocial.length} unclassified '
+        'social-media thoughts to re-wire');
+
+    for (final thought in unclassifiedSocial) {
+      try {
+        _dbg.log('RETRY', 'wiring ${thought.id} — ${thought.displayTitle}');
+        final success = await classifyThought(thought);
+        _dbg.log('RETRY', '${thought.id} → ${success ? "OK" : "FAILED"}');
+      } catch (e) {
+        _dbg.log('RETRY', '${thought.id} error: $e');
+      }
+    }
   }
 
   Future<void> _loadThemeMode() async {
@@ -217,6 +264,12 @@ class SynapseProvider extends ChangeNotifier {
     }
     notifyListeners();
     _checkAutoBundle();
+
+    _dbg.log('RAG', 'addThought "${thought.displayTitle}" '
+        'isNew=$isNew classified=${thought.isClassified} '
+        'hasSummary=${thought.llmSummary != null} '
+        'hasExtracted=${thought.extractedInfo != null}');
+    _vectorSearch.indexThought(thought);
   }
 
   /// Re-inserts a previously deleted thought back into the database and lists.
@@ -227,10 +280,12 @@ class SynapseProvider extends ChangeNotifier {
     }
     _applyFilters();
     notifyListeners();
+    _vectorSearch.indexThought(thought);
   }
 
   Future<void> deleteThought(String id) async {
     await _db.deleteThought(id);
+    _vectorSearch.removeThought(id);
     _items.removeWhere((t) => t.id == id);
     _filteredItems.removeWhere((t) => t.id == id);
     notifyListeners();
@@ -243,6 +298,9 @@ class SynapseProvider extends ChangeNotifier {
     final fIdx = _filteredItems.indexWhere((i) => i.id == thought.id);
     if (fIdx != -1) _filteredItems[fIdx] = thought;
     notifyListeners();
+
+    // Re-index embedding on any content change (hash check inside skips if unchanged)
+    _vectorSearch.indexThought(thought);
   }
 
   Future<void> deleteMultipleThoughts(Set<String> ids) async {
@@ -256,96 +314,11 @@ class SynapseProvider extends ChangeNotifier {
 
   // ── Classification ──
 
-  Thought _applyResult(Thought thought, Map<String, dynamic> result) {
-    final category =
-        categoryFromString(result['category'] as String? ?? 'other');
-    final llmTags = (result['tags'] as List<dynamic>?)
-            ?.map((e) => e.toString())
-            .toList() ??
-        [];
-    final mergedTags = <String>{...thought.tags, ...llmTags}.toList();
-    final markdown = result['markdown'] as String?;
-    final title = result['title'] as String?;
-    final sourceUrl = result['source_url'] as String?;
-
-    return thought.copyWith(
-      category: category,
-      tags: mergedTags,
-      llmSummary: markdown,
-      title: (title != null && title.isNotEmpty) ? title : thought.title,
-      url: (sourceUrl != null && sourceUrl.isNotEmpty)
-          ? sourceUrl
-          : thought.url,
-      isClassified: true,
-      updatedAt: DateTime.now(),
-    );
-  }
-
   Future<bool> classifyThought(Thought thought) async {
-    if (thought.type == ThoughtType.screenshot) {
-      final result = await _llm.extractScreenshotInfo(thought);
-      if (result == null) return false;
-      await updateThought(_applyResult(thought, result));
-      return true;
-    }
-
-    // Try image-enhanced classification for links with preview images
-    if (thought.previewImageUrl != null) {
-      final imageBytes = await _downloadImage(thought.previewImageUrl!);
-      if (imageBytes != null) {
-        final isSocial = thought.tags.contains('social-media') ||
-            (thought.url != null && _isSocialMediaUrl(thought.url!));
-        final result = isSocial
-            ? await _llm.extractAndClassifyPost(thought, imageBytes)
-            : await _llm.classifyLinkWithImage(thought, imageBytes);
-        if (result != null) {
-          await updateThought(_applyResult(thought, result));
-          return true;
-        }
-      }
-    }
-
-    // Fallback: text-only batch of 1
-    final results = await _llm.classifyBatch([thought]);
-    if (results == null || results.isEmpty) return false;
-    await updateThought(_applyResult(thought, results.first));
+    final classified = await _classification.classify(thought);
+    if (classified == null) return false;
+    await updateThought(classified);
     return true;
-  }
-
-  static const _mobileUserAgent =
-      'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 '
-      '(KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36';
-
-  static bool _isSocialMediaUrl(String url) {
-    final host = Uri.tryParse(url)?.host.toLowerCase() ?? '';
-    return host.contains('instagram.com') ||
-        host.contains('tiktok.com') ||
-        host.contains('threads.net') ||
-        host.contains('twitter.com') ||
-        host.contains('x.com');
-  }
-
-  Future<Uint8List?> _downloadImage(String url) async {
-    try {
-      final refererHost = Uri.tryParse(url);
-      final referer = refererHost != null
-          ? '${refererHost.scheme}://${refererHost.host}/'
-          : '';
-      final response = await http.get(
-        Uri.parse(url),
-        headers: {
-          'User-Agent': _mobileUserAgent,
-          'Referer': referer,
-          'Accept': 'image/*,*/*;q=0.8',
-        },
-      ).timeout(const Duration(seconds: 15));
-      if (response.statusCode == 200 && response.bodyBytes.length > 1000) {
-        return response.bodyBytes;
-      }
-    } catch (e) {
-      debugPrint('Image download failed: $e');
-    }
-    return null;
   }
 
   void cancelClassification() {
@@ -365,28 +338,12 @@ class SynapseProvider extends ChangeNotifier {
     int successCount = 0;
     int consecutiveFailures = 0;
 
-    // Separate links and screenshots
-    final links = unclassified.where((t) => t.type == ThoughtType.link).toList();
-    final screenshots = unclassified.where((t) => t.type == ThoughtType.screenshot).toList();
-
-    // Split links into those with images (for vision API) and text-only
-    final linksWithImage = links.where((t) => t.previewImageUrl != null).toList();
-    final linksTextOnly = links.where((t) => t.previewImageUrl == null).toList();
-
-    // Process links with images individually (vision API for richer extraction)
-    for (final thought in linksWithImage) {
+    for (final thought in unclassified) {
       if (!_isClassifyingAll) break;
 
-      final imageBytes = await _downloadImage(thought.previewImageUrl!);
-      Map<String, dynamic>? result;
-      if (imageBytes != null) {
-        result = await _llm.classifyLinkWithImage(thought, imageBytes);
-      }
-      // Fallback to text-only if image classification fails
-      result ??= (await _llm.classifyBatch([thought]))?.firstOrNull;
-
-      if (result != null) {
-        await updateThought(_applyResult(thought, result));
+      final classified = await _classification.classify(thought);
+      if (classified != null) {
+        await updateThought(classified);
         successCount++;
         consecutiveFailures = 0;
       } else {
@@ -399,67 +356,7 @@ class SynapseProvider extends ChangeNotifier {
       _classifyProgress++;
       notifyListeners();
 
-      if (_isClassifyingAll && thought != linksWithImage.last) {
-        await Future.delayed(const Duration(seconds: 4));
-      }
-    }
-
-    // Process text-only links in batches
-    for (int i = 0; i < linksTextOnly.length; i += LlmService.batchSize) {
-      if (!_isClassifyingAll) break;
-
-      final batch = linksTextOnly.sublist(
-        i,
-        (i + LlmService.batchSize).clamp(0, linksTextOnly.length),
-      );
-      final results = await _llm.classifyBatch(batch);
-
-      if (results != null && results.isNotEmpty) {
-        final count = results.length.clamp(0, batch.length);
-        for (int j = 0; j < count; j++) {
-          await updateThought(_applyResult(batch[j], results[j]));
-          successCount++;
-          _classifyProgress++;
-          notifyListeners();
-        }
-        _classifyProgress += (batch.length - count);
-        notifyListeners();
-        consecutiveFailures = 0;
-      } else {
-        consecutiveFailures++;
-        _classifyProgress += batch.length;
-        notifyListeners();
-        if (consecutiveFailures >= 3) {
-          _lastClassifyError = _llm.lastError ?? 'Multiple failures, stopping.';
-          break;
-        }
-      }
-
-      if (_isClassifyingAll && i + LlmService.batchSize < linksTextOnly.length) {
-        await Future.delayed(const Duration(seconds: 4));
-      }
-    }
-
-    // Process screenshots one at a time (each needs image upload)
-    for (final thought in screenshots) {
-      if (!_isClassifyingAll) break;
-
-      final result = await _llm.extractScreenshotInfo(thought);
-      if (result != null) {
-        await updateThought(_applyResult(thought, result));
-        successCount++;
-        consecutiveFailures = 0;
-      } else {
-        consecutiveFailures++;
-        if (consecutiveFailures >= 3) {
-          _lastClassifyError = _llm.lastError ?? 'Multiple failures, stopping.';
-          break;
-        }
-      }
-      _classifyProgress++;
-      notifyListeners();
-
-      if (_isClassifyingAll && thought != screenshots.last) {
+      if (_isClassifyingAll && thought != unclassified.last) {
         await Future.delayed(const Duration(seconds: 4));
       }
     }
@@ -553,7 +450,21 @@ class SynapseProvider extends ChangeNotifier {
       return;
     }
 
-    final answer = await _llm.askQuestion(text, _items);
+    // RAG: vector search for relevant context instead of sending everything
+    _dbg.log('RAG', 'query="${text.substring(0, text.length.clamp(0, 60))}"');
+    List<Thought> contextItems;
+    final scored = await _vectorSearch.search(text, _items);
+    if (scored.isNotEmpty) {
+      contextItems = scored.map((s) => s.thought).toList();
+      _dbg.log('RAG', 'sending ${contextItems.length} relevant items '
+          'to LLM (out of ${_items.length} total)');
+    } else {
+      contextItems = _items;
+      _dbg.log('RAG', 'FALLBACK — no embeddings, sending all '
+          '${_items.length} items');
+    }
+
+    final answer = await _llm.askQuestion(text, contextItems);
     _isChatLoading = false;
 
     await addChatMessage(ChatMessage(
@@ -578,7 +489,11 @@ class SynapseProvider extends ChangeNotifier {
   }
 
   Future<String?> askQuestion(String question) async {
-    return await _llm.askQuestion(question, _items);
+    final scored = await _vectorSearch.search(question, _items);
+    final context = scored.isNotEmpty
+        ? scored.map((s) => s.thought).toList()
+        : _items;
+    return await _llm.askQuestion(question, context);
   }
 
   Future<int> getRemainingFreeCalls() async {
@@ -718,6 +633,40 @@ class SynapseProvider extends ChangeNotifier {
   void dismissBundleSuggestion(BundleSuggestion suggestion) {
     suggestion.isDismissed = true;
     notifyListeners();
+  }
+
+  // ── Vector Embeddings ──
+
+  /// Called externally (e.g. after API key is saved) to re-trigger indexing.
+  Future<void> reindexEmbeddings() async {
+    _dbg.log('RAG', 'reindexEmbeddings triggered');
+    await _indexEmbeddingsInBackground();
+  }
+
+  /// Indexes all thoughts that don't yet have embeddings.
+  /// Runs in the background after app init.
+  Future<void> _indexEmbeddingsInBackground() async {
+    if (_items.isEmpty) return;
+
+    await Future.delayed(const Duration(seconds: 3));
+
+    _dbg.log('RAG', 'starting background indexing '
+        '(${_items.length} thoughts)');
+    _isIndexing = true;
+    notifyListeners();
+
+    try {
+      final sw = Stopwatch()..start();
+      final indexed = await _vectorSearch.indexAll(_items);
+      sw.stop();
+      _dbg.log('RAG', 'background indexing done — '
+          '$indexed new embeddings in ${sw.elapsedMilliseconds}ms');
+    } catch (e) {
+      _dbg.log('RAG', 'background indexing error: $e');
+    } finally {
+      _isIndexing = false;
+      notifyListeners();
+    }
   }
 
   // ── Dead Link Checker ──

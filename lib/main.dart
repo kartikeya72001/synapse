@@ -38,6 +38,8 @@ class _SynapseAppState extends State<SynapseApp> {
   void initState() {
     super.initState();
     _provider = SynapseProvider();
+    _provider.setWiringChecker(_shareHandler.isWiringInProgress);
+    _provider.setCarouselFetcher(_shareHandler.fetchCarouselImages);
     _provider.init();
     DebugLogger.instance.loadPreference();
 

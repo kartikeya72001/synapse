@@ -1,0 +1,10 @@
+1. Local Vector DB (This we can also sync to remote)
+2. Gemma for local processing
+3. Storing user data in google drive for extraction when app is uninstalled
+4. Own models for faster processing
+5. We can also use aws t4g mirco as rds.
+6. Lets instead of embedding everything, make a semantic tree on lets say place, item (food/furniture etc) and then create index on that as well to improve the quality of search
+7. Instagram bot which can direct data to synapse app
+8. Do we want to increase dimensionality of Gemini-embedding-001 to 1536 or 3072 to extract more information from the textual data using `output_dimensionality`
+9. Check if the vault is searchable using the model, the vault should be absolutely local processing base, also, a memory should be transferrable to the vault.
+10. Add user analytics for furniture

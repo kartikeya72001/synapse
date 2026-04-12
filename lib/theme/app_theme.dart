@@ -77,24 +77,70 @@ class SynapseColors {
   );
 }
 
+/// Shared glassmorphism tokens for [GlassDecoration], [FrostedGlass], and [AppTheme].
+class SynapseGlass {
+  SynapseGlass._();
+
+  static const double blurSigma = 20;
+  static const double cardRadius = 18;
+  static const double borderWidthThin = 0.5;
+
+  /// Card / flat glass tint (dark).
+  static const double fillCardDark = 0.05;
+
+  /// Card / flat glass tint (light).
+  static const double fillCardLight = 0.55;
+
+  /// Elevated glass tint (dark) — blurred panels, chips, ColorScheme surface.
+  static const double fillElevatedDark = 0.06;
+
+  /// Frosted panel fill (dark / light).
+  static const double fillFrostedDark = 0.04;
+  static const double fillFrostedLight = 0.45;
+
+  /// Text field glass fill (light).
+  static const double fillInputLightGlass = 0.40;
+
+  /// Chip background (light glass).
+  static const double fillChipLightGlass = 0.5;
+
+  /// Standard glass border (dark).
+  static const double borderDark = 0.08;
+
+  /// Card border (light) — [GlassDecoration.card].
+  static const double borderLightCard = 0.65;
+
+  /// Theme Material surfaces (card border, chips, buttons) — light glass.
+  static const double borderLightMaterial = 0.6;
+
+  /// Frosted / backdrop border (light).
+  static const double borderFrostedLight = 0.7;
+
+  /// Backdrop blur overlay border (dark).
+  static const double borderBackdropDark = 0.10;
+
+  /// Outlined button border (dark glass).
+  static const double borderOutlinedDarkGlass = 0.12;
+}
+
 class GlassDecoration {
   static BoxDecoration card({
     required Brightness brightness,
     bool isGlass = false,
-    double radius = 18,
+    double radius = SynapseGlass.cardRadius,
   }) {
     final isDark = brightness == Brightness.dark;
     if (isGlass) {
       return BoxDecoration(
         color: isDark
-            ? Colors.white.withValues(alpha: 0.05)
-            : Colors.white.withValues(alpha: 0.55),
+            ? Colors.white.withValues(alpha: SynapseGlass.fillCardDark)
+            : Colors.white.withValues(alpha: SynapseGlass.fillCardLight),
         borderRadius: BorderRadius.circular(radius),
         border: Border.all(
           color: isDark
-              ? Colors.white.withValues(alpha: 0.08)
-              : Colors.white.withValues(alpha: 0.65),
-          width: 0.5,
+              ? Colors.white.withValues(alpha: SynapseGlass.borderDark)
+              : Colors.white.withValues(alpha: SynapseGlass.borderLightCard),
+          width: SynapseGlass.borderWidthThin,
         ),
       );
     }
@@ -105,7 +151,7 @@ class GlassDecoration {
         color: isDark
             ? SynapseColors.darkCardBorder
             : SynapseColors.lightCardBorder,
-        width: 0.5,
+        width: SynapseGlass.borderWidthThin,
       ),
       boxShadow: isDark
           ? null
@@ -121,19 +167,19 @@ class GlassDecoration {
 
   static BoxDecoration frosted({
     required Brightness brightness,
-    double radius = 18,
+    double radius = SynapseGlass.cardRadius,
   }) {
     final isDark = brightness == Brightness.dark;
     return BoxDecoration(
       color: isDark
-          ? Colors.white.withValues(alpha: 0.04)
-          : Colors.white.withValues(alpha: 0.45),
+          ? Colors.white.withValues(alpha: SynapseGlass.fillFrostedDark)
+          : Colors.white.withValues(alpha: SynapseGlass.fillFrostedLight),
       borderRadius: BorderRadius.circular(radius),
       border: Border.all(
         color: isDark
-            ? Colors.white.withValues(alpha: 0.08)
-            : Colors.white.withValues(alpha: 0.7),
-        width: 0.5,
+            ? Colors.white.withValues(alpha: SynapseGlass.borderDark)
+            : Colors.white.withValues(alpha: SynapseGlass.borderFrostedLight),
+        width: SynapseGlass.borderWidthThin,
       ),
     );
   }
@@ -149,8 +195,8 @@ class FrostedGlass extends StatelessWidget {
   const FrostedGlass({
     super.key,
     required this.child,
-    this.blur = 20,
-    this.radius = 18,
+    this.blur = SynapseGlass.blurSigma,
+    this.radius = SynapseGlass.cardRadius,
     this.padding,
     this.margin,
   });
@@ -182,14 +228,14 @@ class FrostedGlass extends StatelessWidget {
             padding: padding,
             decoration: BoxDecoration(
               color: isDark
-                  ? Colors.white.withValues(alpha: 0.06)
-                  : Colors.white.withValues(alpha: 0.55),
+                  ? Colors.white.withValues(alpha: SynapseGlass.fillElevatedDark)
+                  : Colors.white.withValues(alpha: SynapseGlass.fillCardLight),
               borderRadius: BorderRadius.circular(radius),
               border: Border.all(
                 color: isDark
-                    ? Colors.white.withValues(alpha: 0.10)
-                    : Colors.white.withValues(alpha: 0.70),
-                width: 0.5,
+                    ? Colors.white.withValues(alpha: SynapseGlass.borderBackdropDark)
+                    : Colors.white.withValues(alpha: SynapseGlass.borderFrostedLight),
+                width: SynapseGlass.borderWidthThin,
               ),
             ),
             child: child,
@@ -211,7 +257,7 @@ class GlassCard extends StatelessWidget {
     required this.child,
     this.padding,
     this.margin,
-    this.radius = 18,
+    this.radius = SynapseGlass.cardRadius,
   });
 
   @override
@@ -296,7 +342,8 @@ class AppTheme {
     secondary: SynapseColors.synapseCyan,
     tertiary: SynapseColors.neuralPink,
     surface: const Color(0x00000000),
-    surfaceContainerHighest: Colors.white.withValues(alpha: 0.55),
+    surfaceContainerHighest:
+        Colors.white.withValues(alpha: SynapseGlass.fillCardLight),
     error: const Color(0xFFDC2626),
   );
 
@@ -307,7 +354,8 @@ class AppTheme {
     secondary: SynapseColors.synapseCyan,
     tertiary: SynapseColors.neuralPink,
     surface: const Color(0x00000000),
-    surfaceContainerHighest: Colors.white.withValues(alpha: 0.06),
+    surfaceContainerHighest:
+        Colors.white.withValues(alpha: SynapseGlass.fillElevatedDark),
     error: const Color(0xFFDC2626),
   );
 
@@ -330,24 +378,24 @@ class AppTheme {
 
     final cardColor = isGlass
         ? (isDark
-            ? Colors.white.withValues(alpha: 0.05)
-            : Colors.white.withValues(alpha: 0.55))
+            ? Colors.white.withValues(alpha: SynapseGlass.fillCardDark)
+            : Colors.white.withValues(alpha: SynapseGlass.fillCardLight))
         : (isDark ? SynapseColors.darkCard : SynapseColors.lightCard);
 
     final cardBorderColor = isGlass
         ? (isDark
-            ? Colors.white.withValues(alpha: 0.08)
-            : Colors.white.withValues(alpha: 0.6))
+            ? Colors.white.withValues(alpha: SynapseGlass.borderDark)
+            : Colors.white.withValues(alpha: SynapseGlass.borderLightMaterial))
         : (isDark
             ? SynapseColors.darkCardBorder
             : SynapseColors.lightCardBorder);
 
     final inputFill = isGlass
         ? (isDark
-            ? Colors.white.withValues(alpha: 0.05)
-            : Colors.white.withValues(alpha: 0.40))
+            ? Colors.white.withValues(alpha: SynapseGlass.fillCardDark)
+            : Colors.white.withValues(alpha: SynapseGlass.fillInputLightGlass))
         : (isDark
-            ? Colors.white.withValues(alpha: 0.04)
+            ? Colors.white.withValues(alpha: SynapseGlass.fillFrostedDark)
             : const Color(0xFFF0EDFF));
 
     final dialogBg = isGlass
@@ -425,16 +473,17 @@ class AppTheme {
       cardTheme: CardThemeData(
         elevation: 0,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(18),
-          side: BorderSide(color: cardBorderColor, width: 0.5),
+          borderRadius: BorderRadius.circular(SynapseGlass.cardRadius),
+          side: BorderSide(
+              color: cardBorderColor, width: SynapseGlass.borderWidthThin),
         ),
         color: cardColor,
       ),
       chipTheme: ChipThemeData(
         backgroundColor: isGlass
             ? (isDark
-                ? Colors.white.withValues(alpha: 0.06)
-                : Colors.white.withValues(alpha: 0.5))
+                ? Colors.white.withValues(alpha: SynapseGlass.fillElevatedDark)
+                : Colors.white.withValues(alpha: SynapseGlass.fillChipLightGlass))
             : colorScheme.primary.withValues(alpha: 0.08),
         labelStyle: GoogleFonts.inter(
           fontSize: 12,
@@ -446,9 +495,10 @@ class AppTheme {
           side: isGlass
               ? BorderSide(
                   color: isDark
-                      ? Colors.white.withValues(alpha: 0.08)
-                      : Colors.white.withValues(alpha: 0.6),
-                  width: 0.5,
+                      ? Colors.white.withValues(alpha: SynapseGlass.borderDark)
+                      : Colors.white
+                          .withValues(alpha: SynapseGlass.borderLightMaterial),
+                  width: SynapseGlass.borderWidthThin,
                 )
               : BorderSide.none,
         ),
@@ -468,11 +518,13 @@ class AppTheme {
         fillColor: inputFill,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
-          borderSide: BorderSide(color: cardBorderColor, width: 0.5),
+          borderSide: BorderSide(
+              color: cardBorderColor, width: SynapseGlass.borderWidthThin),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
-          borderSide: BorderSide(color: cardBorderColor, width: 0.5),
+          borderSide: BorderSide(
+              color: cardBorderColor, width: SynapseGlass.borderWidthThin),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
@@ -530,10 +582,12 @@ class AppTheme {
           side: BorderSide(
             color: isGlass
                 ? (isDark
-                    ? Colors.white.withValues(alpha: 0.12)
-                    : Colors.white.withValues(alpha: 0.6))
+                    ? Colors.white
+                        .withValues(alpha: SynapseGlass.borderOutlinedDarkGlass)
+                    : Colors.white
+                        .withValues(alpha: SynapseGlass.borderLightMaterial))
                 : colorScheme.primary.withValues(alpha: 0.25),
-            width: 0.5,
+            width: SynapseGlass.borderWidthThin,
           ),
           textStyle: GoogleFonts.inter(
             fontSize: 14,

@@ -6,10 +6,13 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/thought.dart';
 import '../utils/constants.dart';
+import 'debug_logger.dart';
 
 enum LlmProvider { gemini, openai }
 
 class LlmService {
+  final _dbg = DebugLogger.instance;
+
   static const _geminiBaseUrl =
       'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite-preview:generateContent';
   static const _openaiBaseUrl = 'https://api.openai.com/v1/chat/completions';
@@ -85,6 +88,38 @@ class LlmService {
     return _parseBatchResponse(text, items.length);
   }
 
+  // ── Vision Job Runner ──
+
+  Future<Map<String, dynamic>?> _runVisionJob({
+    required String prompt,
+    required List<String> base64Images,
+  }) async {
+    if (!await hasApiKey()) return null;
+    final provider = await _getActiveProvider();
+    final apiKey = await _getApiKey(provider);
+    if (apiKey == null || apiKey.isEmpty) return null;
+
+    try {
+      String? text;
+      if (provider == LlmProvider.gemini) {
+        if (base64Images.length == 1) {
+          text = await _callGeminiWithImageRaw(apiKey, prompt, base64Images.first);
+        } else {
+          text = await _callGeminiWithMultipleImages(apiKey, prompt, base64Images);
+        }
+      } else {
+        text = await _callOpenaiWithImageRaw(apiKey, prompt, base64Images.first);
+      }
+      if (text == null) return null;
+      await _incrementCallCount();
+      return _parseStructuredResponse(text);
+    } catch (e) {
+      _lastError = _friendlyError(e);
+      _dbg.log('LLM', 'vision job error: $e');
+      return null;
+    }
+  }
+
   // ── Classification (screenshots — single, needs image) ──
 
   Future<Map<String, dynamic>?> extractScreenshotInfo(Thought item) async {
@@ -92,14 +127,6 @@ class LlmService {
       _lastError = 'No image path found.';
       return null;
     }
-    if (!await hasApiKey()) {
-      _lastError = 'No API key configured.';
-      return null;
-    }
-
-    final provider = await _getActiveProvider();
-    final apiKey = await _getApiKey(provider);
-    if (apiKey == null || apiKey.isEmpty) return null;
 
     final imageFile = File(item.imagePath!);
     if (!await imageFile.exists()) {
@@ -108,31 +135,25 @@ class LlmService {
     }
 
     final bytes = await imageFile.readAsBytes();
-    final base64Image = base64Encode(bytes);
-
     final prompt = _buildScreenshotPrompt();
-
-    try {
-      String? text;
-      if (provider == LlmProvider.gemini) {
-        text = await _callGeminiWithImageRaw(apiKey, prompt, base64Image);
-      } else {
-        text = await _callOpenaiWithImageRaw(apiKey, prompt, base64Image);
-      }
-      if (text == null) return null;
-      await _incrementCallCount();
-      return _parseStructuredResponse(text);
-    } catch (e) {
-      _lastError = _friendlyError(e);
-      debugPrint('Synapse LLM vision error: $e');
-      return null;
-    }
+    return _runVisionJob(prompt: prompt, base64Images: [base64Encode(bytes)]);
   }
 
   // ── Q&A ──
 
   Future<String?> askQuestion(String question, List<Thought> contextItems) async {
     if (!await hasApiKey()) return null;
+
+    _dbg.log('LLM', 'askQuestion with ${contextItems.length} context items');
+    for (final item in contextItems) {
+      final fields = <String>[];
+      if (item.title != null) fields.add('title');
+      if (item.description != null) fields.add('desc');
+      if (item.llmSummary != null) fields.add('summary(${item.llmSummary!.length}c)');
+      if (item.extractedInfo != null) fields.add('extracted(${item.extractedInfo!.length}c)');
+      if (item.ocrText != null) fields.add('ocr');
+      _dbg.log('LLM', '  → "${item.displayTitle}" [${fields.join(", ")}]');
+    }
 
     final contextStr = contextItems.map((item) {
       final parts = <String>[];
@@ -226,7 +247,7 @@ VISUAL: <brief description of what is shown>''';
       return null;
     } catch (e) {
       _lastError = _friendlyError(e);
-      debugPrint('Synapse media transcription error: $e');
+      _dbg.log('LLM', 'media transcription error: $e');
       return null;
     }
   }
@@ -293,6 +314,85 @@ VISUAL: <brief description of what is shown>''';
     );
   }
 
+  // ── Prompt Helpers ──
+
+  void _appendThoughtFields(
+    StringBuffer sb,
+    Thought item, {
+    int maxDescLength = 800,
+    String urlLabel = 'Post URL',
+    String descLabel = 'Caption',
+    String siteLabel = 'Platform',
+  }) {
+    if (item.url != null) sb.writeln('$urlLabel: ${item.url}');
+    if (item.title != null) sb.writeln('Title: ${item.title}');
+    if (item.description != null) {
+      final desc = item.description!.length > maxDescLength
+          ? '${item.description!.substring(0, maxDescLength)}...'
+          : item.description!;
+      sb.writeln('$descLabel: $desc');
+    }
+    if (item.siteName != null) sb.writeln('$siteLabel: ${item.siteName}');
+  }
+
+  String _buildSocialPostPreamble(Thought item, {int? slideCount}) {
+    final sb = StringBuffer();
+
+    if (slideCount != null && slideCount > 1) {
+      sb.writeln('You are analyzing a social media CAROUSEL post with $slideCount slides/images.');
+      sb.writeln('Each image is attached in order (Slide 1, Slide 2, etc.).');
+    } else {
+      sb.writeln('You are analyzing a social media post. Your job is to extract EVERY piece of information.');
+    }
+    sb.writeln();
+
+    sb.writeln('CRITICAL INSTRUCTIONS:');
+    if (slideCount != null && slideCount > 1) {
+      sb.writeln('1. Analyze EVERY slide individually — do not skip any.');
+      sb.writeln('2. Read ALL text visible in each slide — overlays, captions, watermarks, signs, menus, labels, ratings, prices, addresses, phone numbers.');
+      sb.writeln('3. Identify ALL named entities — restaurant names, place names, brand names, usernames, product names.');
+      sb.writeln('4. Extract ALL numbers — ratings (e.g. 9/10), prices, quantities, dates, phone numbers, addresses.');
+      sb.writeln('5. Describe what is visually shown — food items, locations, products, people, activities.');
+      sb.writeln('6. Capture recommendations, tips, reviews, or opinions expressed.');
+      sb.writeln('7. Combine information from ALL slides into one comprehensive summary.');
+    } else {
+      sb.writeln('1. Read ALL text visible in the image — overlays, captions, watermarks, signs, menus, labels, ratings, prices.');
+      sb.writeln('2. Identify ALL named entities — restaurant names, place names, brand names, usernames, product names.');
+      sb.writeln('3. Extract ALL numbers — ratings (e.g. 9/10), prices, quantities, dates, phone numbers, addresses.');
+      sb.writeln('4. Describe what is visually shown — food items, locations, products, people, activities.');
+      sb.writeln('5. Capture recommendations, tips, reviews, or opinions expressed.');
+    }
+    sb.writeln();
+
+    _appendThoughtFields(sb, item);
+    sb.writeln();
+
+    sb.writeln('OUTPUT FORMAT:');
+    sb.writeln('CATEGORY: <category>');
+    sb.writeln('TAGS: <tags>');
+    sb.writeln('TITLE: <descriptive title>');
+    sb.writeln('URL: none');
+    sb.writeln();
+
+    if (slideCount != null && slideCount > 1) {
+      sb.writeln('Then write a COMPREHENSIVE extraction covering ALL $slideCount slides with:');
+      sb.writeln('- Every name, place, product, and recommendation mentioned across all slides');
+      sb.writeln('- All text overlays verbatim from each slide');
+      sb.writeln('- All ratings, prices, and specific details');
+      sb.writeln('- Description of visual content from each slide');
+      sb.writeln('- Be thorough — the user should be able to recall ANY detail from ANY slide by reading your output alone.');
+    } else {
+      sb.writeln('Then write a COMPREHENSIVE extraction with:');
+      sb.writeln('- Every name, place, product, and recommendation mentioned');
+      sb.writeln('- All text overlays verbatim');
+      sb.writeln('- All ratings, prices, and specific details');
+      sb.writeln('- Description of visual content');
+      sb.writeln('- Be thorough — the user should be able to recall ANY detail from this post by reading your output alone.');
+    }
+
+    return sb.toString();
+  }
+
   // ── Deep Content Extraction (social media posts) ──
 
   /// Extracts ALL visible information from a post image and returns both
@@ -301,62 +401,8 @@ VISUAL: <brief description of what is shown>''';
     Thought item,
     Uint8List imageBytes,
   ) async {
-    if (!await hasApiKey()) return null;
-
-    final provider = await _getActiveProvider();
-    final apiKey = await _getApiKey(provider);
-    if (apiKey == null || apiKey.isEmpty) return null;
-
-    final base64Image = base64Encode(imageBytes);
-
-    final prompt = StringBuffer();
-    prompt.writeln('You are analyzing a social media post. Your job is to extract EVERY piece of information.');
-    prompt.writeln();
-    prompt.writeln('CRITICAL INSTRUCTIONS:');
-    prompt.writeln('1. Read ALL text visible in the image — overlays, captions, watermarks, signs, menus, labels, ratings, prices.');
-    prompt.writeln('2. Identify ALL named entities — restaurant names, place names, brand names, usernames, product names.');
-    prompt.writeln('3. Extract ALL numbers — ratings (e.g. 9/10), prices, quantities, dates, phone numbers, addresses.');
-    prompt.writeln('4. Describe what is visually shown — food items, locations, products, people, activities.');
-    prompt.writeln('5. Capture recommendations, tips, reviews, or opinions expressed.');
-    prompt.writeln();
-    if (item.url != null) prompt.writeln('Post URL: ${item.url}');
-    if (item.title != null) prompt.writeln('Title: ${item.title}');
-    if (item.description != null) {
-      final desc = item.description!.length > 800
-          ? '${item.description!.substring(0, 800)}...'
-          : item.description!;
-      prompt.writeln('Caption: $desc');
-    }
-    if (item.siteName != null) prompt.writeln('Platform: ${item.siteName}');
-    prompt.writeln();
-    prompt.writeln('OUTPUT FORMAT:');
-    prompt.writeln('CATEGORY: <category>');
-    prompt.writeln('TAGS: <tags>');
-    prompt.writeln('TITLE: <descriptive title>');
-    prompt.writeln('URL: none');
-    prompt.writeln();
-    prompt.writeln('Then write a COMPREHENSIVE extraction with:');
-    prompt.writeln('- Every name, place, product, and recommendation mentioned');
-    prompt.writeln('- All text overlays verbatim');
-    prompt.writeln('- All ratings, prices, and specific details');
-    prompt.writeln('- Description of visual content');
-    prompt.writeln('- Be thorough — the user should be able to recall ANY detail from this post by reading your output alone.');
-
-    try {
-      String? text;
-      if (provider == LlmProvider.gemini) {
-        text = await _callGeminiWithImageRaw(apiKey, prompt.toString(), base64Image);
-      } else {
-        text = await _callOpenaiWithImageRaw(apiKey, prompt.toString(), base64Image);
-      }
-      if (text == null) return null;
-      await _incrementCallCount();
-      return _parseStructuredResponse(text);
-    } catch (e) {
-      _lastError = _friendlyError(e);
-      debugPrint('Synapse deep extraction error: $e');
-      return null;
-    }
+    final prompt = _buildSocialPostPreamble(item);
+    return _runVisionJob(prompt: prompt, base64Images: [base64Encode(imageBytes)]);
   }
 
   // ── Carousel Extraction (multiple images in one request) ──
@@ -369,73 +415,12 @@ VISUAL: <brief description of what is shown>''';
   ) async {
     if (images.isEmpty) return null;
     if (images.length == 1) return extractAndClassifyPost(item, images.first);
-    if (!await hasApiKey()) return null;
 
-    final provider = await _getActiveProvider();
-    final apiKey = await _getApiKey(provider);
-    if (apiKey == null || apiKey.isEmpty) return null;
-
-    final prompt = StringBuffer();
-    prompt.writeln('You are analyzing a social media CAROUSEL post with ${images.length} slides/images.');
-    prompt.writeln('Each image is attached in order (Slide 1, Slide 2, etc.).');
-    prompt.writeln();
-    prompt.writeln('CRITICAL INSTRUCTIONS:');
-    prompt.writeln('1. Analyze EVERY slide individually — do not skip any.');
-    prompt.writeln('2. Read ALL text visible in each slide — overlays, captions, watermarks, signs, menus, labels, ratings, prices, addresses, phone numbers.');
-    prompt.writeln('3. Identify ALL named entities — restaurant names, place names, brand names, usernames, product names.');
-    prompt.writeln('4. Extract ALL numbers — ratings (e.g. 9/10), prices, quantities, dates, phone numbers, addresses.');
-    prompt.writeln('5. Describe what is visually shown — food items, locations, products, people, activities.');
-    prompt.writeln('6. Capture recommendations, tips, reviews, or opinions expressed.');
-    prompt.writeln('7. Combine information from ALL slides into one comprehensive summary.');
-    prompt.writeln();
-    if (item.url != null) prompt.writeln('Post URL: ${item.url}');
-    if (item.title != null) prompt.writeln('Title: ${item.title}');
-    if (item.description != null) {
-      final desc = item.description!.length > 800
-          ? '${item.description!.substring(0, 800)}...'
-          : item.description!;
-      prompt.writeln('Caption: $desc');
-    }
-    if (item.siteName != null) prompt.writeln('Platform: ${item.siteName}');
-    prompt.writeln();
-    prompt.writeln('OUTPUT FORMAT:');
-    prompt.writeln('CATEGORY: <category>');
-    prompt.writeln('TAGS: <tags>');
-    prompt.writeln('TITLE: <descriptive title>');
-    prompt.writeln('URL: none');
-    prompt.writeln();
-    prompt.writeln('Then write a COMPREHENSIVE extraction covering ALL ${images.length} slides with:');
-    prompt.writeln('- Every name, place, product, and recommendation mentioned across all slides');
-    prompt.writeln('- All text overlays verbatim from each slide');
-    prompt.writeln('- All ratings, prices, and specific details');
-    prompt.writeln('- Description of visual content from each slide');
-    prompt.writeln('- Be thorough — the user should be able to recall ANY detail from ANY slide by reading your output alone.');
-
-    try {
-      String? text;
-      if (provider == LlmProvider.gemini) {
-        final base64Images = images.map((b) => base64Encode(b)).toList();
-        text = await _callGeminiWithMultipleImages(
-          apiKey,
-          prompt.toString(),
-          base64Images,
-        );
-      } else {
-        // OpenAI fallback: send first image only
-        text = await _callOpenaiWithImageRaw(
-          apiKey,
-          prompt.toString(),
-          base64Encode(images.first),
-        );
-      }
-      if (text == null) return null;
-      await _incrementCallCount();
-      return _parseStructuredResponse(text);
-    } catch (e) {
-      _lastError = _friendlyError(e);
-      debugPrint('Synapse carousel extraction error: $e');
-      return null;
-    }
+    final prompt = _buildSocialPostPreamble(item, slideCount: images.length);
+    return _runVisionJob(
+      prompt: prompt,
+      base64Images: images.map((b) => base64Encode(b)).toList(),
+    );
   }
 
   // ── Link Classification with Preview Image ──
@@ -444,30 +429,8 @@ VISUAL: <brief description of what is shown>''';
     Thought item,
     Uint8List imageBytes,
   ) async {
-    if (!await hasApiKey()) return null;
-
-    final provider = await _getActiveProvider();
-    final apiKey = await _getApiKey(provider);
-    if (apiKey == null || apiKey.isEmpty) return null;
-
-    final base64Image = base64Encode(imageBytes);
     final prompt = _buildSingleLinkWithImagePrompt(item);
-
-    try {
-      String? text;
-      if (provider == LlmProvider.gemini) {
-        text = await _callGeminiWithImageRaw(apiKey, prompt, base64Image);
-      } else {
-        text = await _callOpenaiWithImageRaw(apiKey, prompt, base64Image);
-      }
-      if (text == null) return null;
-      await _incrementCallCount();
-      return _parseStructuredResponse(text);
-    } catch (e) {
-      _lastError = _friendlyError(e);
-      debugPrint('Synapse LLM vision classification error: $e');
-      return null;
-    }
+    return _runVisionJob(prompt: prompt, base64Images: [base64Encode(imageBytes)]);
   }
 
   String _buildSingleLinkWithImagePrompt(Thought item) {
@@ -481,15 +444,7 @@ VISUAL: <brief description of what is shown>''';
     sb.writeln('- Describe specific visual content (food dishes, products, locations)');
     sb.writeln('- Capture any recommendations, tips, or reviews');
     sb.writeln();
-    if (item.url != null) sb.writeln('Post URL: ${item.url}');
-    if (item.title != null) sb.writeln('Title: ${item.title}');
-    if (item.description != null) {
-      final desc = item.description!.length > 500
-          ? '${item.description!.substring(0, 500)}...'
-          : item.description!;
-      sb.writeln('Caption: $desc');
-    }
-    if (item.siteName != null) sb.writeln('Platform: ${item.siteName}');
+    _appendThoughtFields(sb, item, maxDescLength: 500);
     sb.writeln();
     sb.writeln('Output exactly 1 item. Do NOT include "=== ITEM ===" headers.');
     sb.writeln('Be comprehensive — the user should be able to recall ANY detail from this post.');
@@ -531,17 +486,14 @@ URL: <if a URL is visible; otherwise "none">
   String _buildBatchLinkPrompt(List<Thought> items) {
     final itemsBlock = StringBuffer();
     for (int i = 0; i < items.length; i++) {
-      final item = items[i];
       itemsBlock.writeln('--- INPUT ${i + 1} ---');
-      if (item.url != null) itemsBlock.writeln('URL: ${item.url}');
-      if (item.title != null) itemsBlock.writeln('Title: ${item.title}');
-      if (item.description != null) {
-        final desc = item.description!.length > 500
-            ? '${item.description!.substring(0, 500)}...'
-            : item.description!;
-        itemsBlock.writeln('Description: $desc');
-      }
-      if (item.siteName != null) itemsBlock.writeln('Site: ${item.siteName}');
+      _appendThoughtFields(
+        itemsBlock, items[i],
+        maxDescLength: 500,
+        urlLabel: 'URL',
+        descLabel: 'Description',
+        siteLabel: 'Site',
+      );
       itemsBlock.writeln();
     }
 
@@ -695,7 +647,7 @@ Do NOT include "=== ITEM ===" headers.''';
       }
     } catch (e) {
       _lastError = _friendlyError(e);
-      debugPrint('Synapse LLM error: $e');
+      _dbg.log('LLM', 'error: $e');
       return null;
     }
   }
@@ -834,7 +786,7 @@ Do NOT include "=== ITEM ===" headers.''';
           return null;
         }
         final waitSeconds = attempt * 5;
-        debugPrint('Synapse: rate-limited (${response.statusCode}), '
+        _dbg.log('LLM', 'rate-limited (${response.statusCode}), '
             'retrying in ${waitSeconds}s (attempt $attempt/$maxRetries)');
         await Future.delayed(Duration(seconds: waitSeconds));
         continue;
@@ -855,7 +807,7 @@ Do NOT include "=== ITEM ===" headers.''';
       _lastError = 'Gemini is overloaded (503). Try again later.';
     } else {
       _lastError = 'Gemini API error ${response.statusCode}';
-      debugPrint('Synapse Gemini error ${response.statusCode}: ${response.body}');
+      _dbg.log('LLM', 'Gemini error ${response.statusCode}: ${response.body}');
     }
     return null;
   }
@@ -935,7 +887,7 @@ Do NOT include "=== ITEM ===" headers.''';
       _lastError = 'Rate limited (429). Wait a moment and try again.';
     } else {
       _lastError = 'OpenAI error ${response.statusCode}';
-      debugPrint('Synapse OpenAI error ${response.statusCode}: ${response.body}');
+      _dbg.log('LLM', 'OpenAI error ${response.statusCode}: ${response.body}');
     }
     return null;
   }
