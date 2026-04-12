@@ -139,19 +139,13 @@ class _HomeScreenState extends State<HomeScreen>
                   child: IndexedStack(
                     index: _currentIndex,
                     children: [
-                      Padding(
-                        padding: EdgeInsets.only(
-                          top: topPad + 76,
-                          bottom: bottomPad + 80,
-                        ),
-                        child: const ChatView(),
+                      ChatView(
+                        topPad: topPad + 76,
+                        bottomPad: bottomPad + 80,
                       ),
-                      Padding(
-                        padding: EdgeInsets.only(
-                          top: topPad + 76,
-                          bottom: bottomPad + 80,
-                        ),
-                        child: const LibraryView(),
+                      LibraryView(
+                        topPad: topPad + 76,
+                        bottomPad: bottomPad + 80,
                       ),
                     ],
                   ),
@@ -169,24 +163,16 @@ class _HomeScreenState extends State<HomeScreen>
                 ),
               ),
 
-              // Floating bottom nav
+              // Floating bottom nav — always visible
               Positioned(
                 bottom: bottomPad + 8,
                 left: 16,
                 right: 16,
-                child: SlideTransition(
-                  position: _bottomSlide,
-                  child: _buildFloatingBottomNav(theme, colorScheme, isDark),
-                ),
+                child: _buildFloatingBottomNav(theme, colorScheme, isDark),
               ),
             ],
           ),
-          floatingActionButton: _currentIndex == 1
-              ? SlideTransition(
-                  position: _bottomSlide,
-                  child: _buildFab(),
-                )
-              : null,
+          floatingActionButton: _currentIndex == 1 ? _buildFab() : null,
         );
       },
     );

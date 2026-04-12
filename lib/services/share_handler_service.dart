@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
@@ -125,37 +126,54 @@ class ShareHandlerService {
     return thought;
   }
 
-  /// Downloads the social media post image (in-memory only), sends it to the
-  /// LLM for deep content extraction, then stores the text data. No images
-  /// are persisted to disk.
+  // ── Instagram detection ──
+
+  static bool _isInstagramUrl(String url) {
+    final host = Uri.tryParse(url)?.host.toLowerCase() ?? '';
+    return host.contains('instagram.com');
+  }
+
+  // ── Main social media extraction entry point ──
+
   Future<void> _extractSocialMediaContent(
     Thought thought,
     String postUrl,
     String? ogImageUrl,
   ) async {
-    Uint8List? imageBytes;
+    List<Uint8List> allImages = [];
 
-    // Attempt 1: download the OG preview image with proper headers
-    if (ogImageUrl != null) {
-      imageBytes = await _downloadWithHeaders(ogImageUrl, postUrl);
+    // For Instagram, try to get ALL carousel images
+    if (_isInstagramUrl(postUrl)) {
+      allImages = await _fetchInstagramImages(postUrl);
     }
 
-    // Attempt 2: fetch the post page HTML and extract a fresh image URL
-    if (imageBytes == null) {
-      final freshImageUrl = await _scrapeImageUrl(postUrl);
-      if (freshImageUrl != null) {
-        imageBytes = await _downloadWithHeaders(freshImageUrl, postUrl);
+    // Fallback: single OG image
+    if (allImages.isEmpty && ogImageUrl != null) {
+      final bytes = await _downloadWithHeaders(ogImageUrl, postUrl);
+      if (bytes != null) allImages = [bytes];
+    }
+
+    // Fallback: scrape page for og:image
+    if (allImages.isEmpty) {
+      final freshUrl = await _scrapeOgImageUrl(postUrl);
+      if (freshUrl != null) {
+        final bytes = await _downloadWithHeaders(freshUrl, postUrl);
+        if (bytes != null) allImages = [bytes];
       }
     }
 
-    if (imageBytes == null || imageBytes.length < 1000) {
-      debugPrint('Could not download social media image for $postUrl');
+    if (allImages.isEmpty) {
+      debugPrint('No images found for $postUrl');
       return;
     }
 
-    // Send to LLM for deep extraction — image stays in memory only
+    debugPrint('Got ${allImages.length} image(s) for $postUrl');
+
+    // Send to LLM — multi-image if carousel, single if not
     try {
-      final result = await _llm.extractAndClassifyPost(thought, imageBytes);
+      final result = allImages.length > 1
+          ? await _llm.extractAndClassifyCarousel(thought, allImages)
+          : await _llm.extractAndClassifyPost(thought, allImages.first);
       if (result == null) return;
 
       final category =
@@ -184,7 +202,177 @@ class ShareHandlerService {
     }
   }
 
-  /// Downloads an image URL with browser-like headers to bypass CDN blocks.
+  // ── Instagram carousel fetcher (ported from Intagram_data_gen) ──
+
+  /// Fetches the Instagram post page HTML, parses embedded JSON blobs
+  /// for carousel data, and downloads all image URLs in-memory.
+  Future<List<Uint8List>> _fetchInstagramImages(String postUrl) async {
+    try {
+      final response = await http.get(
+        Uri.parse(postUrl),
+        headers: {
+          'User-Agent': _mobileUserAgent,
+          'Accept':
+              'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+          'Accept-Language': 'en-US,en;q=0.9',
+          'Accept-Encoding': 'gzip, deflate',
+        },
+      ).timeout(const Duration(seconds: 20));
+
+      if (response.statusCode != 200) return [];
+
+      final body = response.body;
+      final mediaUrls = <String>[];
+
+      // Strategy 1: window._sharedData embedded JSON
+      _tryExtractSharedData(body, mediaUrls);
+
+      // Strategy 2: window.__additionalDataLoaded embedded JSON
+      _tryExtractAdditionalData(body, mediaUrls);
+
+      // Strategy 3: JSON-LD contentUrl
+      _tryExtractJsonLd(body, mediaUrls);
+
+      // Strategy 4: fall back to og:image if nothing found
+      if (mediaUrls.isEmpty) {
+        final ogUrl = _parseOgImage(body);
+        if (ogUrl != null) mediaUrls.add(ogUrl);
+      }
+
+      if (mediaUrls.isEmpty) return [];
+
+      debugPrint('Found ${mediaUrls.length} media URL(s) from page HTML');
+
+      // Download all images in parallel (in-memory, cap at 10)
+      final urls = mediaUrls.take(10).toList();
+      final futures = urls.map((url) => _downloadWithHeaders(url, postUrl));
+      final results = await Future.wait(futures);
+
+      return results
+          .where((b) => b != null && b.length > 1000)
+          .cast<Uint8List>()
+          .toList();
+    } catch (e) {
+      debugPrint('Instagram carousel fetch failed: $e');
+      return [];
+    }
+  }
+
+  /// Parses window._sharedData for shortcode_media with carousel edges.
+  static void _tryExtractSharedData(String body, List<String> urls) {
+    final match = RegExp(
+      r'window\._sharedData\s*=\s*(\{.+?\});\s*$',
+      multiLine: true,
+    ).firstMatch(body);
+    if (match == null) return;
+
+    try {
+      final data = jsonDecode(match.group(1)!);
+      final postPage = data['entry_data']?['PostPage'];
+      if (postPage is List && postPage.isNotEmpty) {
+        final media = postPage[0]['graphql']?['shortcode_media'] ??
+            postPage[0]['media'];
+        if (media != null) _extractMediaUrls(media, urls);
+      }
+    } catch (_) {}
+  }
+
+  /// Parses window.__additionalDataLoaded for shortcode_media.
+  static void _tryExtractAdditionalData(String body, List<String> urls) {
+    final match = RegExp(
+      r"""window\.__additionalDataLoaded\s*\(\s*['"].*?['"]\s*,\s*(\{.+?\})\s*\)""",
+      dotAll: true,
+    ).firstMatch(body);
+    if (match == null) return;
+
+    try {
+      final data = jsonDecode(match.group(1)!);
+      final media = data['graphql']?['shortcode_media'] ?? data['media'];
+      if (media != null) _extractMediaUrls(media, urls);
+    } catch (_) {}
+  }
+
+  /// Parses JSON-LD for contentUrl (image/video).
+  static void _tryExtractJsonLd(String body, List<String> urls) {
+    final ldRegex = RegExp(
+      r"""<script\s+type\s*=\s*["']application/ld\+json["']\s*>([\s\S]*?)</script>""",
+      caseSensitive: false,
+    );
+    for (final match in ldRegex.allMatches(body)) {
+      try {
+        final data = jsonDecode(match.group(1)!);
+        if (data is Map<String, dynamic>) {
+          final contentUrl = data['contentUrl']?.toString();
+          if (contentUrl != null && !urls.contains(contentUrl)) {
+            urls.add(contentUrl);
+          }
+          final imageObj = data['image'];
+          if (imageObj is String && !urls.contains(imageObj)) {
+            urls.add(imageObj);
+          }
+        }
+      } catch (_) {}
+    }
+  }
+
+  /// Extracts all image/video display_url from GraphQL shortcode_media,
+  /// including carousel children from edge_sidecar_to_children.
+  static void _extractMediaUrls(
+    Map<String, dynamic> media,
+    List<String> urls,
+  ) {
+    final sidecar = media['edge_sidecar_to_children']?['edges'];
+    if (sidecar is List) {
+      for (final edge in sidecar) {
+        final node = edge['node'];
+        if (node == null) continue;
+        final isVideo = node['is_video'] == true;
+        // For images: display_url. For videos: use display_url (thumbnail).
+        // We want visual frames for OCR, not video streams.
+        final url = node['display_url']?.toString();
+        if (url != null && url.isNotEmpty && !urls.contains(url)) {
+          urls.add(url);
+        }
+        // If it's a video, also grab video_url for potential transcription
+        if (isVideo) {
+          final videoUrl = node['video_url']?.toString();
+          if (videoUrl != null && !urls.contains(videoUrl)) {
+            // Skip video URLs for now — we're doing image OCR
+          }
+        }
+      }
+    } else {
+      // Single image/video post
+      final url = media['display_url']?.toString();
+      if (url != null && url.isNotEmpty && !urls.contains(url)) {
+        urls.add(url);
+      }
+    }
+  }
+
+  /// Parses og:image from raw HTML.
+  static String? _parseOgImage(String body) {
+    final patterns = [
+      RegExp(
+        r'''<meta\s+[^>]*?property\s*=\s*["']og:image["'][^>]*?content\s*=\s*["']([^"']+)["']''',
+        caseSensitive: false,
+      ),
+      RegExp(
+        r'''<meta\s+[^>]*?content\s*=\s*["']([^"']+)["'][^>]*?property\s*=\s*["']og:image["']''',
+        caseSensitive: false,
+      ),
+    ];
+    for (final pattern in patterns) {
+      final match = pattern.firstMatch(body);
+      if (match != null) {
+        return match.group(1)!.replaceAll('&amp;', '&');
+      }
+    }
+    return null;
+  }
+
+  // ── Image download helper ──
+
   Future<Uint8List?> _downloadWithHeaders(
     String imageUrl,
     String refererUrl,
@@ -220,8 +408,7 @@ class ShareHandlerService {
   }
 
   /// Fetches the post page HTML and extracts the og:image URL directly.
-  /// This gives a fresh CDN URL that hasn't expired yet.
-  Future<String?> _scrapeImageUrl(String postUrl) async {
+  Future<String?> _scrapeOgImageUrl(String postUrl) async {
     try {
       final response = await http.get(
         Uri.parse(postUrl),
@@ -233,26 +420,7 @@ class ShareHandlerService {
       ).timeout(const Duration(seconds: 15));
 
       if (response.statusCode != 200) return null;
-
-      // Parse og:image from HTML
-      final ogImagePattern = RegExp(
-        r'''<meta\s+[^>]*?(?:property|name)\s*=\s*["']og:image["'][^>]*?content\s*=\s*["']([^"']+)["']''',
-        caseSensitive: false,
-      );
-      final ogImagePatternAlt = RegExp(
-        r'''<meta\s+[^>]*?content\s*=\s*["']([^"']+)["'][^>]*?(?:property|name)\s*=\s*["']og:image["']''',
-        caseSensitive: false,
-      );
-
-      var match = ogImagePattern.firstMatch(response.body);
-      match ??= ogImagePatternAlt.firstMatch(response.body);
-
-      if (match != null) {
-        var imgUrl = match.group(1)!;
-        imgUrl = imgUrl.replaceAll('&amp;', '&');
-        debugPrint('Scraped fresh og:image: ${imgUrl.substring(0, 80)}...');
-        return imgUrl;
-      }
+      return _parseOgImage(response.body);
     } catch (e) {
       debugPrint('Page scrape failed: $e');
     }

@@ -10,7 +10,14 @@ import '../screens/group_detail_screen.dart';
 import '../screens/settings_screen.dart';
 
 class LibraryView extends StatefulWidget {
-  const LibraryView({super.key});
+  final double topPad;
+  final double bottomPad;
+
+  const LibraryView({
+    super.key,
+    this.topPad = 0,
+    this.bottomPad = 0,
+  });
 
   @override
   State<LibraryView> createState() => _LibraryViewState();
@@ -59,10 +66,12 @@ class _LibraryViewState extends State<LibraryView> {
           },
           child: Column(
             children: [
+              SizedBox(height: widget.topPad),
               _buildToolbar(theme, colorScheme, provider),
               Expanded(
                 child: _buildContent(theme, colorScheme, provider),
               ),
+              SizedBox(height: widget.bottomPad),
             ],
           ),
         );

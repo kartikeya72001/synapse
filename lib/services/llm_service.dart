@@ -11,7 +11,7 @@ enum LlmProvider { gemini, openai }
 
 class LlmService {
   static const _geminiBaseUrl =
-      'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash:generateContent';
+      'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite-preview:generateContent';
   static const _openaiBaseUrl = 'https://api.openai.com/v1/chat/completions';
 
   String? _lastError;
@@ -353,6 +353,85 @@ VISUAL: <brief description of what is shown>''';
     }
   }
 
+  // ── Carousel Extraction (multiple images in one request) ──
+
+  /// Sends ALL carousel images to Gemini in a single request for comprehensive
+  /// OCR and content extraction across all slides.
+  Future<Map<String, dynamic>?> extractAndClassifyCarousel(
+    Thought item,
+    List<Uint8List> images,
+  ) async {
+    if (images.isEmpty) return null;
+    if (images.length == 1) return extractAndClassifyPost(item, images.first);
+    if (!await hasApiKey()) return null;
+
+    final provider = await _getActiveProvider();
+    final apiKey = await _getApiKey(provider);
+    if (apiKey == null || apiKey.isEmpty) return null;
+
+    final prompt = StringBuffer();
+    prompt.writeln('You are analyzing a social media CAROUSEL post with ${images.length} slides/images.');
+    prompt.writeln('Each image is attached in order (Slide 1, Slide 2, etc.).');
+    prompt.writeln();
+    prompt.writeln('CRITICAL INSTRUCTIONS:');
+    prompt.writeln('1. Analyze EVERY slide individually — do not skip any.');
+    prompt.writeln('2. Read ALL text visible in each slide — overlays, captions, watermarks, signs, menus, labels, ratings, prices, addresses, phone numbers.');
+    prompt.writeln('3. Identify ALL named entities — restaurant names, place names, brand names, usernames, product names.');
+    prompt.writeln('4. Extract ALL numbers — ratings (e.g. 9/10), prices, quantities, dates, phone numbers, addresses.');
+    prompt.writeln('5. Describe what is visually shown — food items, locations, products, people, activities.');
+    prompt.writeln('6. Capture recommendations, tips, reviews, or opinions expressed.');
+    prompt.writeln('7. Combine information from ALL slides into one comprehensive summary.');
+    prompt.writeln();
+    if (item.url != null) prompt.writeln('Post URL: ${item.url}');
+    if (item.title != null) prompt.writeln('Title: ${item.title}');
+    if (item.description != null) {
+      final desc = item.description!.length > 800
+          ? '${item.description!.substring(0, 800)}...'
+          : item.description!;
+      prompt.writeln('Caption: $desc');
+    }
+    if (item.siteName != null) prompt.writeln('Platform: ${item.siteName}');
+    prompt.writeln();
+    prompt.writeln('OUTPUT FORMAT:');
+    prompt.writeln('CATEGORY: <category>');
+    prompt.writeln('TAGS: <tags>');
+    prompt.writeln('TITLE: <descriptive title>');
+    prompt.writeln('URL: none');
+    prompt.writeln();
+    prompt.writeln('Then write a COMPREHENSIVE extraction covering ALL ${images.length} slides with:');
+    prompt.writeln('- Every name, place, product, and recommendation mentioned across all slides');
+    prompt.writeln('- All text overlays verbatim from each slide');
+    prompt.writeln('- All ratings, prices, and specific details');
+    prompt.writeln('- Description of visual content from each slide');
+    prompt.writeln('- Be thorough — the user should be able to recall ANY detail from ANY slide by reading your output alone.');
+
+    try {
+      String? text;
+      if (provider == LlmProvider.gemini) {
+        final base64Images = images.map((b) => base64Encode(b)).toList();
+        text = await _callGeminiWithMultipleImages(
+          apiKey,
+          prompt.toString(),
+          base64Images,
+        );
+      } else {
+        // OpenAI fallback: send first image only
+        text = await _callOpenaiWithImageRaw(
+          apiKey,
+          prompt.toString(),
+          base64Encode(images.first),
+        );
+      }
+      if (text == null) return null;
+      await _incrementCallCount();
+      return _parseStructuredResponse(text);
+    } catch (e) {
+      _lastError = _friendlyError(e);
+      debugPrint('Synapse carousel extraction error: $e');
+      return null;
+    }
+  }
+
   // ── Link Classification with Preview Image ──
 
   Future<Map<String, dynamic>?> classifyLinkWithImage(
@@ -685,6 +764,51 @@ Do NOT include "=== ITEM ===" headers.''';
         headers: {'Content-Type': 'application/json'},
         body: body,
       ).timeout(const Duration(seconds: 90)),
+      _extractGeminiText,
+    );
+  }
+
+  /// Sends multiple images in a single Gemini request (carousel support).
+  Future<String?> _callGeminiWithMultipleImages(
+    String apiKey,
+    String prompt,
+    List<String> base64Images,
+  ) async {
+    final url = '$_geminiBaseUrl?key=$apiKey';
+    final parts = <Map<String, dynamic>>[
+      {'text': prompt},
+    ];
+    for (final img in base64Images) {
+      parts.add({
+        'inline_data': {
+          'mime_type': 'image/jpeg',
+          'data': img,
+        },
+      });
+    }
+
+    final maxTokens = (base64Images.length * 1500).clamp(3000, 8000);
+    final body = jsonEncode({
+      'systemInstruction': {
+        'parts': [
+          {'text': _systemInstruction},
+        ],
+      },
+      'contents': [
+        {'parts': parts},
+      ],
+      'generationConfig': {
+        'temperature': 0.4,
+        'maxOutputTokens': maxTokens,
+      },
+    });
+
+    return _callWithRetry(
+      () => http.post(
+        Uri.parse(url),
+        headers: {'Content-Type': 'application/json'},
+        body: body,
+      ).timeout(const Duration(seconds: 180)),
       _extractGeminiText,
     );
   }

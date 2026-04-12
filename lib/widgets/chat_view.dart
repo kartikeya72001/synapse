@@ -9,7 +9,14 @@ import '../providers/synapse_provider.dart';
 import '../theme/app_theme.dart';
 
 class ChatView extends StatefulWidget {
-  const ChatView({super.key});
+  final double topPad;
+  final double bottomPad;
+
+  const ChatView({
+    super.key,
+    this.topPad = 0,
+    this.bottomPad = 0,
+  });
 
   @override
   State<ChatView> createState() => _ChatViewState();
@@ -49,10 +56,15 @@ class _ChatViewState extends State<ChatView> {
           children: [
             Expanded(
               child: messages.isEmpty
-                  ? _buildEmptyChat(theme, colorScheme)
+                  ? Padding(
+                      padding: EdgeInsets.only(top: widget.topPad),
+                      child: _buildEmptyChat(theme, colorScheme),
+                    )
                   : ListView.builder(
                       controller: _scrollController,
-                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                      padding: EdgeInsets.fromLTRB(
+                        16, widget.topPad + 8, 16, 8,
+                      ),
                       itemCount: messages.length + (isLoading ? 1 : 0),
                       itemBuilder: (context, index) {
                         if (index == messages.length && isLoading) {
@@ -67,7 +79,10 @@ class _ChatViewState extends State<ChatView> {
                       },
                     ),
             ),
-            _buildInputArea(theme, colorScheme, isDark, provider),
+            Padding(
+              padding: EdgeInsets.only(bottom: widget.bottomPad),
+              child: _buildInputArea(theme, colorScheme, isDark, provider),
+            ),
           ],
         );
       },
