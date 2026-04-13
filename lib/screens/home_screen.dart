@@ -4,9 +4,11 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import '../providers/synapse_provider.dart';
+import '../services/onboarding_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/chat_view.dart';
 import '../widgets/library_view.dart';
+import '../widgets/tutorial_overlay.dart';
 import 'add_thought_screen.dart';
 import 'pulse_screen.dart';
 import 'secrets_screen.dart';
@@ -15,15 +17,23 @@ import 'thought_detail_screen.dart';
 import 'timeline_screen.dart';
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key});
+  final bool startTutorial;
+
+  const HomeScreen({super.key, this.startTutorial = false});
 
   @override
-  State<HomeScreen> createState() => _HomeScreenState();
+  State<HomeScreen> createState() => HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class HomeScreenState extends State<HomeScreen> {
   int _tab = 0;
   bool _vaultVisited = false;
+  bool _showTutorial = false;
+
+  final _fabKey = GlobalKey();
+  final _bottomNavKey = GlobalKey();
+  final List<GlobalKey> _navItemKeys =
+      List.generate(6, (_) => GlobalKey());
 
   void _switchTab(int i) {
     if (i == 4 && !_vaultVisited) _vaultVisited = true;
@@ -40,10 +50,124 @@ class _HomeScreenState extends State<HomeScreen> {
   ];
 
   @override
+  void initState() {
+    super.initState();
+    if (widget.startTutorial) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _checkAndStartTutorial();
+      });
+    }
+  }
+
+  Future<void> _checkAndStartTutorial() async {
+    final shouldShow = await OnboardingService.instance.shouldShowOnStartup();
+    if (shouldShow && mounted) {
+      Future.delayed(const Duration(milliseconds: 600), () {
+        if (mounted) setState(() => _showTutorial = true);
+      });
+    }
+  }
+
+  void startTutorial() {
+    setState(() => _showTutorial = true);
+  }
+
+  List<TutorialStep> _buildTutorialSteps() {
+    return [
+      TutorialStep(
+        title: 'Welcome to Synapse',
+        description:
+            'Your second brain, powered by AI. '
+            'Let\'s take a quick tour of all the features '
+            'that help you save, organize, and recall anything.',
+        icon: Icons.psychology_rounded,
+        highlightTarget: false,
+      ),
+      TutorialStep(
+        targetKey: _navItemKeys[0],
+        title: 'Cortex — AI Chat',
+        description:
+            'Ask questions about your saved memories. '
+            'Cortex uses AI to search, summarize, and compare '
+            'everything you\'ve captured.',
+        icon: Icons.chat_bubble_rounded,
+        onShow: () => _switchTab(0),
+      ),
+      TutorialStep(
+        targetKey: _navItemKeys[1],
+        title: 'Memories — Your Library',
+        description:
+            'All your saved links, screenshots, and posts live here. '
+            'Search, filter by category, create clusters, '
+            'and bulk-classify with AI.',
+        icon: Icons.auto_awesome_mosaic_rounded,
+        onShow: () => _switchTab(1),
+      ),
+      TutorialStep(
+        targetKey: _fabKey,
+        title: 'Add a Memory',
+        description:
+            'Tap the + button to manually save a link or capture '
+            'a screenshot. You can also share directly from any app '
+            'to Synapse.',
+        icon: Icons.add_rounded,
+        onShow: () => _switchTab(1),
+      ),
+      TutorialStep(
+        targetKey: _navItemKeys[2],
+        title: 'Recall — Timeline',
+        description:
+            'See your memories organized chronologically — '
+            'today, yesterday, this week, and beyond. '
+            'Perfect for revisiting recent saves.',
+        icon: Icons.timeline_rounded,
+        onShow: () => _switchTab(2),
+      ),
+      TutorialStep(
+        targetKey: _navItemKeys[3],
+        title: 'Pulse — Analytics',
+        description:
+            'Visualize your knowledge with stats, charts, '
+            'tag clouds, and an interactive knowledge graph. '
+            'See how your ideas connect.',
+        icon: Icons.monitor_heart_rounded,
+        onShow: () => _switchTab(3),
+      ),
+      TutorialStep(
+        targetKey: _navItemKeys[4],
+        title: 'Vault — Secrets',
+        description:
+            'Store sensitive information behind biometric authentication. '
+            'Encrypted and secure, only accessible with your fingerprint or face.',
+        icon: Icons.shield_rounded,
+        onShow: () => _switchTab(3),
+      ),
+      TutorialStep(
+        targetKey: _navItemKeys[5],
+        title: 'Settings',
+        description:
+            'Customize your theme, choose your AI model and persona, '
+            'set auto-delete rules, import/export data, and add API keys '
+            'for unlimited power.',
+        icon: Icons.tune_rounded,
+        onShow: () => _switchTab(5),
+      ),
+      TutorialStep(
+        title: 'You\'re All Set!',
+        description:
+            'Share a link or screenshot from any app to start building '
+            'your second brain. The more you save, the smarter Cortex gets.',
+        icon: Icons.rocket_launch_rounded,
+        highlightTarget: false,
+        onShow: () => _switchTab(0),
+      ),
+    ];
+  }
+
+  @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    // Only rebuild HomeScreen when a new share arrives, not on every provider change
     final hasPending = context.select<SynapseProvider, bool>(
         (p) => p.pendingSharedThought != null);
     if (hasPending) {
@@ -59,43 +183,66 @@ class _HomeScreenState extends State<HomeScreen> {
       const SettingsScreen(),
     ];
 
-    return Scaffold(
-      extendBody: true,
-      body: IndexedStack(
-        index: _tab,
-        children: [
-          for (int i = 0; i < pages.length; i++)
-            TickerMode(enabled: _tab == i, child: pages[i]),
-        ],
-      ),
-      bottomNavigationBar: _BottomNav(
-        currentIndex: _tab,
-        isDark: isDark,
-        onTabTap: _switchTab,
-      ),
-      floatingActionButton: _tab == 1
-          ? Container(
-                decoration: BoxDecoration(
-                color: SynapseColors.ink,
-                borderRadius: BorderRadius.circular(18),
-              ),
-              child: FloatingActionButton(
-                heroTag: 'add',
-                backgroundColor: Colors.transparent,
-                elevation: 0,
-                onPressed: () async {
-                  final p = context.read<SynapseProvider>();
-                  await Navigator.push(
-                    context,
-                    SynapsePageRoute(
-                        builder: (_) => const AddThoughtScreen()),
-                  );
-                  if (mounted) p.loadThoughts();
-                },
-                child: const Icon(Icons.add_rounded, size: 26),
-              ),
-            )
-          : null,
+    return Stack(
+      children: [
+        Scaffold(
+          extendBody: true,
+          body: IndexedStack(
+            index: _tab,
+            children: [
+              for (int i = 0; i < pages.length; i++)
+                TickerMode(enabled: _tab == i, child: pages[i]),
+            ],
+          ),
+          bottomNavigationBar: _BottomNav(
+            key: _bottomNavKey,
+            currentIndex: _tab,
+            isDark: isDark,
+            onTabTap: _switchTab,
+            navItemKeys: _navItemKeys,
+          ),
+          floatingActionButton: _tab == 1
+              ? Container(
+                    key: _fabKey,
+                    decoration: BoxDecoration(
+                    color: SynapseColors.ink,
+                    borderRadius: BorderRadius.circular(18),
+                  ),
+                  child: FloatingActionButton(
+                    heroTag: 'add',
+                    backgroundColor: Colors.transparent,
+                    elevation: 0,
+                    onPressed: () async {
+                      final p = context.read<SynapseProvider>();
+                      await Navigator.push(
+                        context,
+                        SynapsePageRoute(
+                            builder: (_) => const AddThoughtScreen()),
+                      );
+                      if (mounted) p.loadThoughts();
+                    },
+                    child: const Icon(Icons.add_rounded, size: 26),
+                  ),
+                )
+              : null,
+        ),
+        if (_showTutorial)
+          TutorialOverlay(
+            steps: _buildTutorialSteps(),
+            onComplete: () {
+              if (mounted) {
+                setState(() => _showTutorial = false);
+                _switchTab(0);
+              }
+            },
+            onSkip: () {
+              if (mounted) {
+                setState(() => _showTutorial = false);
+                _switchTab(0);
+              }
+            },
+          ),
+      ],
     );
   }
 
@@ -140,11 +287,14 @@ class _BottomNav extends StatefulWidget {
   final int currentIndex;
   final bool isDark;
   final ValueChanged<int> onTabTap;
+  final List<GlobalKey> navItemKeys;
 
   const _BottomNav({
+    super.key,
     required this.currentIndex,
     required this.isDark,
     required this.onTabTap,
+    required this.navItemKeys,
   });
 
   @override
@@ -221,8 +371,9 @@ class _BottomNavState extends State<_BottomNav> {
                   physics: const BouncingScrollPhysics(),
                   child: Row(
                     children: List.generate(
-                      _HomeScreenState._navItems.length,
+                      HomeScreenState._navItems.length,
                       (i) => SizedBox(
+                        key: widget.navItemKeys[i],
                         width: itemWidth,
                         child: _buildNavItem(i),
                       ),
@@ -301,7 +452,7 @@ class _BottomNavState extends State<_BottomNav> {
   }
 
   Widget _buildNavItem(int idx) {
-    final item = _HomeScreenState._navItems[idx];
+    final item = HomeScreenState._navItems[idx];
     final isActive = currentIndex == idx;
     final activeColor = _pageAccentColor(idx, isDark);
     final inactiveColor =

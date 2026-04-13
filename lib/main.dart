@@ -336,6 +336,6 @@ class _SynapseHomeState extends State<_SynapseHome> {
         onComplete: () => setState(() => _showSplash = false),
       );
     }
-    return const HomeScreen();
+    return const HomeScreen(startTutorial: true);
   }
 }

@@ -17,6 +17,8 @@ class AppConstants {
   static const String autoWirePref = 'auto_wire_on_share';
   static const String geminiModelPref = 'gemini_model';
   static const String ragPersonaPref = 'rag_persona';
+  static const String onboardingCompletedPref = 'onboarding_completed';
+  static const String onboardingShowOnStartupPref = 'onboarding_show_on_startup';
 
   static const int maxFreeLlmCalls = 2;
   static const int maxChatHistory = 50;

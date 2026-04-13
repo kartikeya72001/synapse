@@ -9,11 +9,13 @@ import '../utils/permissions.dart';
 import '../providers/synapse_provider.dart' show SynapseProvider, AppThemeMode;
 import '../services/debug_logger.dart';
 import '../services/llm_service.dart';
+import '../services/onboarding_service.dart';
 import '../services/share_handler_service.dart';
 import '../services/export_service.dart';
 import '../models/thought.dart' show Thought, ThoughtType;
 import '../utils/constants.dart';
 import '../theme/app_theme.dart';
+import 'home_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -34,6 +36,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _backgroundShare = false;
   bool _debugLog = false;
   bool _autoWire = true;
+  bool _showTutorialOnStartup = false;
   String _selectedModel = 'gemini-3.1-flash-lite-preview';
   String _ragPersona = 'balanced';
 
@@ -74,6 +77,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final autoWire = prefs.getBool(AppConstants.autoWirePref) ?? true;
     final selectedModel = prefs.getString(AppConstants.geminiModelPref) ?? 'gemini-3.1-flash-lite-preview';
     final ragPersona = prefs.getString(AppConstants.ragPersonaPref) ?? 'balanced';
+    final tutorialOnStartup = await OnboardingService.instance.getShowOnStartup();
 
     if (!mounted) return;
 
@@ -86,6 +90,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _backgroundShare = bgShare;
       _debugLog = dbgLog;
       _autoWire = autoWire;
+      _showTutorialOnStartup = tutorialOnStartup;
       _selectedModel = selectedModel;
       _ragPersona = ragPersona;
     });
@@ -239,6 +244,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
           _buildExportCsvCard(theme, colorScheme, isDark),
           const SizedBox(height: 12),
           _buildImportCsvCard(theme, colorScheme, isDark),
+          const SizedBox(height: 32),
+          _buildSectionTitle(theme, 'Guide'),
+          const SizedBox(height: 12),
+          _buildReplayTutorialCard(theme, colorScheme, isDark),
+          const SizedBox(height: 12),
+          _buildTutorialStartupToggle(theme, colorScheme, isDark),
           const SizedBox(height: 32),
           _buildSectionTitle(theme, 'About'),
           const SizedBox(height: 12),
@@ -1334,6 +1345,95 @@ class _SettingsScreenState extends State<SettingsScreen> {
           }).toList(),
         ),
       ],
+    );
+  }
+
+  Widget _buildReplayTutorialCard(ThemeData theme, ColorScheme colorScheme, bool isDark) {
+    return GestureDetector(
+      onTap: () {
+        final homeState = context.findAncestorStateOfType<HomeScreenState>();
+        if (homeState != null) {
+          homeState.startTutorial();
+        }
+      },
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: SynapseDecoration.card(dark: isDark),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                gradient: SynapseGradients.accent,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Icon(Icons.school_rounded, color: Colors.white, size: 20),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Replay App Tour',
+                      style: theme.textTheme.titleMedium),
+                  const SizedBox(height: 2),
+                  Text(
+                    'Walk through all features with guided tooltips.',
+                    style: theme.textTheme.bodySmall,
+                  ),
+                ],
+              ),
+            ),
+            Icon(Icons.play_arrow_rounded,
+                color: SynapseColors.accent, size: 22),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTutorialStartupToggle(ThemeData theme, ColorScheme colorScheme, bool isDark) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: SynapseDecoration.card(dark: isDark),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: isDark ? SynapseColors.darkLavender : SynapseColors.lavenderLight,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(Icons.replay_rounded, size: 20, color: SynapseColors.accent),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Show tour on startup', style: theme.textTheme.titleMedium),
+                const SizedBox(height: 2),
+                Text(
+                  'Display the app tour every time you open Synapse',
+                  style: theme.textTheme.bodySmall,
+                ),
+              ],
+            ),
+          ),
+          Switch.adaptive(
+            value: _showTutorialOnStartup,
+            activeThumbColor: SynapseColors.accent,
+            activeTrackColor: SynapseColors.accent.withValues(alpha: 0.4),
+            onChanged: (val) async {
+              setState(() => _showTutorialOnStartup = val);
+              await OnboardingService.instance.setShowOnStartup(val);
+              if (val) {
+                await OnboardingService.instance.reset();
+              }
+            },
+          ),
+        ],
+      ),
     );
   }
 
