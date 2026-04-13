@@ -1,15 +1,16 @@
 import 'package:flutter/material.dart';
-import '../theme/app_theme.dart';
 import 'package:flutter/services.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../utils/permissions.dart';
-import '../providers/synapse_provider.dart' show SynapseProvider, AppThemeMode, AppVisualStyle;
+import '../providers/synapse_provider.dart' show SynapseProvider, AppThemeMode;
 import '../services/debug_logger.dart';
 import '../services/llm_service.dart';
 import '../services/share_handler_service.dart';
 import '../services/export_service.dart';
 import '../utils/constants.dart';
+import '../theme/app_theme.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -117,49 +118,51 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
-
-    final isGlass = SynapseStyle.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
-    return Scaffold(
-      extendBodyBehindAppBar: isGlass,
-      appBar: AppBar(
-        title: Text('Settings', style: theme.appBarTheme.titleTextStyle),
+    return Container(
+      decoration: BoxDecoration(
+        gradient: isDark ? SynapseGradients.settingsBgDark : SynapseGradients.settingsBg,
       ),
-      body: Container(
-        decoration: isGlass
-            ? BoxDecoration(
-                gradient: isDark
-                    ? SynapseColors.gradientAurora
-                    : SynapseColors.gradientAuroraLight,
-              )
-            : null,
-        child: ListView(
-          padding: EdgeInsets.only(
-            left: 20, right: 20, bottom: 20,
-            top: isGlass ? kToolbarHeight + MediaQuery.of(context).padding.top + 20 : 20,
-          ),
-        children: [
+      child: SafeArea(
+        bottom: false,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 14, 16, 10),
+              child: Text(
+                'Settings',
+                style: GoogleFonts.fraunces(
+                  fontSize: 28,
+                  fontWeight: FontWeight.w800,
+                  color: isDark ? SynapseColors.darkInk : SynapseColors.ink,
+                  letterSpacing: -0.5,
+                ),
+              ),
+            ),
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(20, 8, 20, 100),
+                children: [
           _buildSectionTitle(theme, 'Appearance'),
-          _buildThemeSelector(theme, colorScheme),
-          const SizedBox(height: 20),
-          _buildVisualStyleSelector(theme, colorScheme),
+          _buildThemeSelector(theme, colorScheme, isDark),
           const SizedBox(height: 32),
           _buildSectionTitle(theme, 'Auto-Delete'),
           const SizedBox(height: 12),
-          _buildAutoDeleteSelector(theme, colorScheme),
+          _buildAutoDeleteSelector(theme, colorScheme, isDark),
           const SizedBox(height: 32),
           _buildSectionTitle(theme, 'Sharing'),
           const SizedBox(height: 12),
-          _buildBackgroundShareToggle(theme, colorScheme),
+          _buildBackgroundShareToggle(theme, colorScheme, isDark),
           const SizedBox(height: 12),
-          _buildDebugLogToggle(theme, colorScheme),
+          _buildDebugLogToggle(theme, colorScheme, isDark),
           const SizedBox(height: 32),
           _buildSectionTitle(theme, 'Neural Engine'),
           const SizedBox(height: 12),
-          _buildInfoCard(theme, colorScheme),
+          _buildInfoCard(theme, colorScheme, isDark),
           const SizedBox(height: 16),
-          _buildProviderSelector(theme, colorScheme),
+          _buildProviderSelector(theme, colorScheme, isDark),
           const SizedBox(height: 20),
           _buildApiKeyField(
             theme: theme,
@@ -181,83 +184,73 @@ class _SettingsScreenState extends State<SettingsScreen> {
             hint: 'sk-...',
           ),
           const SizedBox(height: 24),
-          Container(
-            width: double.infinity,
-            decoration: BoxDecoration(
-              gradient: SynapseColors.gradientPrimary,
-              borderRadius: BorderRadius.circular(14),
-              boxShadow: [
-                BoxShadow(
-                  color: SynapseColors.neuroPurple.withValues(alpha: 0.3),
-                  blurRadius: 12,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-            ),
-            child: Material(
-              color: Colors.transparent,
-              child: InkWell(
+          FilledButton.icon(
+            onPressed: _saveSettings,
+            icon: const Icon(Icons.save_rounded, size: 18),
+            label: const Text('Save Settings'),
+            style: FilledButton.styleFrom(
+              backgroundColor: SynapseColors.ink,
+              foregroundColor: Colors.white,
+              elevation: 0,
+              minimumSize: const Size(double.infinity, 48),
+              shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(14),
-                onTap: _saveSettings,
-                child: const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 14),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.save_rounded,
-                          color: Colors.white, size: 18),
-                      SizedBox(width: 8),
-                      Text(
-                        'Commit Config',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w600,
-                          fontSize: 14,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
               ),
             ),
           ),
           const SizedBox(height: 32),
           _buildSectionTitle(theme, 'Data'),
           const SizedBox(height: 12),
-          _buildGalleryImportCard(theme, colorScheme),
+          _buildGalleryImportCard(theme, colorScheme, isDark),
           const SizedBox(height: 12),
-          _buildExportCsvCard(theme, colorScheme),
+          _buildExportCsvCard(theme, colorScheme, isDark),
           const SizedBox(height: 32),
           _buildSectionTitle(theme, 'About'),
           const SizedBox(height: 12),
-          _buildAboutCard(theme, colorScheme),
-        ],
-      ),
+          _buildAboutCard(theme, colorScheme, isDark),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 
   Widget _buildSectionTitle(ThemeData theme, String title) {
-    return ShaderMask(
-      shaderCallback: (bounds) =>
-          SynapseColors.gradientPrimary.createShader(bounds),
-      child: Text(
-        title,
-        style: theme.textTheme.headlineSmall?.copyWith(color: Colors.white),
-      ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: GoogleFonts.fraunces(
+            fontSize: 22,
+            fontWeight: FontWeight.w700,
+            color: theme.colorScheme.onSurface,
+            letterSpacing: -0.3,
+            height: 1.2,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Container(
+          height: 2,
+          width: 40,
+          decoration: BoxDecoration(
+            color: SynapseColors.ink.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(1),
+          ),
+        ),
+      ],
     );
   }
 
-  Widget _buildThemeSelector(ThemeData theme, ColorScheme colorScheme) {
+  Widget _buildThemeSelector(ThemeData theme, ColorScheme colorScheme, bool isDark) {
     final provider = context.watch<SynapseProvider>();
     return Padding(
       padding: const EdgeInsets.only(top: 12),
       child: Container(
         padding: const EdgeInsets.all(4),
-        decoration: BoxDecoration(
-          color: colorScheme.primary.withValues(alpha: 0.08),
-          borderRadius: BorderRadius.circular(14),
-        ),
+        decoration: SynapseDecoration.card(dark: isDark),
         child: Row(
           children: [
             _themeOption(
@@ -301,7 +294,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           duration: const Duration(milliseconds: 200),
           padding: const EdgeInsets.symmetric(vertical: 12),
           decoration: BoxDecoration(
-            color: isSelected ? colorScheme.primary : Colors.transparent,
+            color: isSelected ? SynapseColors.ink : Colors.transparent,
             borderRadius: BorderRadius.circular(10),
           ),
           child: Row(
@@ -310,7 +303,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               Icon(
                 icon,
                 size: 18,
-                color: isSelected ? colorScheme.onPrimary : colorScheme.primary,
+                color: isSelected ? Colors.white : SynapseColors.inkMuted,
               ),
               const SizedBox(width: 6),
               Text(
@@ -318,7 +311,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 style: TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
-                  color: isSelected ? colorScheme.onPrimary : colorScheme.primary,
+                  color: isSelected ? Colors.white : colorScheme.onSurface,
                 ),
               ),
             ],
@@ -328,51 +321,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  Widget _buildVisualStyleSelector(ThemeData theme, ColorScheme colorScheme) {
-    final provider = context.watch<SynapseProvider>();
-    return Container(
-      padding: const EdgeInsets.all(4),
-      decoration: BoxDecoration(
-        color: colorScheme.primary.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: Row(
-        children: [
-          _themeOption(
-            icon: Icons.palette_rounded,
-            label: 'Material You',
-            isSelected: provider.visualStyle == AppVisualStyle.materialYou,
-            onTap: () => provider.setVisualStyle(AppVisualStyle.materialYou),
-            colorScheme: colorScheme,
-          ),
-          _themeOption(
-            icon: Icons.blur_on_rounded,
-            label: 'Material Glass',
-            isSelected: provider.visualStyle == AppVisualStyle.materialGlass,
-            onTap: () => provider.setVisualStyle(AppVisualStyle.materialGlass),
-            colorScheme: colorScheme,
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildAutoDeleteSelector(ThemeData theme, ColorScheme colorScheme) {
+  Widget _buildAutoDeleteSelector(ThemeData theme, ColorScheme colorScheme, bool isDark) {
     return Container(
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: colorScheme.outlineVariant.withValues(alpha: 0.2),
-        ),
-      ),
+      decoration: SynapseDecoration.card(dark: isDark),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Icon(Icons.auto_delete_rounded, size: 20, color: colorScheme.primary),
+              Icon(Icons.auto_delete_rounded, size: 20, color: SynapseColors.accent),
               const SizedBox(width: 8),
               Text(
                 'Forget memories older than:',
@@ -402,13 +360,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                   decoration: BoxDecoration(
                     color: isActive
-                        ? colorScheme.primary
-                        : colorScheme.primary.withValues(alpha: 0.06),
+                        ? SynapseColors.ink
+                        : SynapseColors.ink.withValues(alpha: 0.04),
                     borderRadius: BorderRadius.circular(20),
                     border: Border.all(
                       color: isActive
-                          ? colorScheme.primary
-                          : colorScheme.outlineVariant.withValues(alpha: 0.3),
+                          ? SynapseColors.ink
+                          : SynapseColors.ink.withValues(alpha: 0.06),
                     ),
                   ),
                   child: Text(
@@ -416,7 +374,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     style: TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w600,
-                      color: isActive ? colorScheme.onPrimary : colorScheme.onSurface,
+                      color: isActive ? Colors.white : colorScheme.onSurface,
                     ),
                   ),
                 ),
@@ -428,16 +386,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  Widget _buildBackgroundShareToggle(ThemeData theme, ColorScheme colorScheme) {
+  Widget _buildBackgroundShareToggle(ThemeData theme, ColorScheme colorScheme, bool isDark) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: colorScheme.outlineVariant.withValues(alpha: 0.2),
-        ),
-      ),
+      decoration: SynapseDecoration.card(dark: isDark),
       child: SwitchListTile.adaptive(
         contentPadding: EdgeInsets.zero,
         title: Text('Process in background',
@@ -450,7 +402,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
         ),
         value: _backgroundShare,
-        activeColor: colorScheme.primary,
+        activeTrackColor: SynapseColors.accent,
+        activeThumbColor: Colors.white,
         onChanged: (val) async {
           setState(() => _backgroundShare = val);
           final prefs = await SharedPreferences.getInstance();
@@ -460,16 +413,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  Widget _buildDebugLogToggle(ThemeData theme, ColorScheme colorScheme) {
+  Widget _buildDebugLogToggle(ThemeData theme, ColorScheme colorScheme, bool isDark) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: colorScheme.outlineVariant.withValues(alpha: 0.2),
-        ),
-      ),
+      decoration: SynapseDecoration.card(dark: isDark),
       child: SwitchListTile.adaptive(
         contentPadding: EdgeInsets.zero,
         title: Text('Debug logging',
@@ -482,7 +429,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
         ),
         value: _debugLog,
-        activeColor: colorScheme.primary,
+        activeTrackColor: SynapseColors.accent,
+        activeThumbColor: Colors.white,
         onChanged: (val) async {
           setState(() => _debugLog = val);
           await DebugLogger.instance.setEnabled(val);
@@ -491,19 +439,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  Widget _buildInfoCard(ThemeData theme, ColorScheme colorScheme) {
+  Widget _buildInfoCard(ThemeData theme, ColorScheme colorScheme, bool isDark) {
     return Container(
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: colorScheme.secondary.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: colorScheme.secondary.withValues(alpha: 0.2),
-        ),
-      ),
+      decoration: SynapseDecoration.card(dark: isDark),
       child: Row(
         children: [
-          Icon(Icons.info_rounded, color: colorScheme.secondary),
+          Icon(Icons.info_rounded, color: SynapseColors.accent),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
@@ -544,13 +486,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  Widget _buildProviderSelector(ThemeData theme, ColorScheme colorScheme) {
+  Widget _buildProviderSelector(ThemeData theme, ColorScheme colorScheme, bool isDark) {
     return Container(
       padding: const EdgeInsets.all(4),
-      decoration: BoxDecoration(
-        color: colorScheme.primary.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(14),
-      ),
+      decoration: SynapseDecoration.card(dark: isDark),
       child: Row(
         children: [
           _providerOption(
@@ -583,7 +522,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           duration: const Duration(milliseconds: 200),
           padding: const EdgeInsets.symmetric(vertical: 12),
           decoration: BoxDecoration(
-            color: isSelected ? colorScheme.primary : Colors.transparent,
+            color: isSelected ? SynapseColors.ink : Colors.transparent,
             borderRadius: BorderRadius.circular(10),
           ),
           child: Text(
@@ -591,7 +530,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             textAlign: TextAlign.center,
             style: TextStyle(
               fontWeight: FontWeight.w600,
-              color: isSelected ? colorScheme.onPrimary : colorScheme.primary,
+              color: isSelected ? Colors.white : colorScheme.onSurface,
             ),
           ),
         ),
@@ -632,27 +571,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  Widget _buildGalleryImportCard(ThemeData theme, ColorScheme colorScheme) {
+  Widget _buildGalleryImportCard(ThemeData theme, ColorScheme colorScheme, bool isDark) {
     return GestureDetector(
       onTap: _importFromGallery,
       child: Container(
         padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: colorScheme.surfaceContainerHighest,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: colorScheme.outlineVariant.withValues(alpha: 0.2),
-          ),
-        ),
+        decoration: SynapseDecoration.card(dark: isDark),
         child: Row(
           children: [
             Container(
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
-                color: colorScheme.primary.withValues(alpha: 0.1),
+                color: SynapseColors.lavenderLight,
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: Icon(Icons.photo_library_rounded, color: colorScheme.primary),
+              child: Icon(Icons.photo_library_rounded, color: SynapseColors.accent),
             ),
             const SizedBox(width: 16),
             Expanded(
@@ -749,24 +682,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
-  Widget _buildExportCsvCard(ThemeData theme, ColorScheme colorScheme) {
+  Widget _buildExportCsvCard(ThemeData theme, ColorScheme colorScheme, bool isDark) {
     return GestureDetector(
       onTap: _isExporting ? null : _exportToCsv,
       child: Container(
         padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: colorScheme.surfaceContainerHighest,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: colorScheme.outlineVariant.withValues(alpha: 0.2),
-          ),
-        ),
+        decoration: SynapseDecoration.card(dark: isDark),
         child: Row(
           children: [
             Container(
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
-                color: colorScheme.tertiary.withValues(alpha: 0.1),
+                color: SynapseColors.lavenderLight,
                 borderRadius: BorderRadius.circular(12),
               ),
               child: _isExporting
@@ -775,10 +702,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       height: 24,
                       child: CircularProgressIndicator(
                         strokeWidth: 2,
-                        color: colorScheme.tertiary,
+                        color: SynapseColors.accent,
                       ),
                     )
-                  : Icon(Icons.download_rounded, color: colorScheme.tertiary),
+                  : Icon(Icons.download_rounded, color: SynapseColors.accent),
             ),
             const SizedBox(width: 16),
             Expanded(
@@ -847,57 +774,70 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
-  Widget _buildAboutCard(ThemeData theme, ColorScheme colorScheme) {
+  Widget _buildAboutCard(ThemeData theme, ColorScheme colorScheme, bool isDark) {
     return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: colorScheme.outlineVariant.withValues(alpha: 0.2),
-        ),
-      ),
+      clipBehavior: Clip.antiAlias,
+      decoration: SynapseDecoration.card(dark: isDark),
       child: Column(
         children: [
           Container(
-            padding: const EdgeInsets.all(16),
+            width: double.infinity,
+            padding: const EdgeInsets.fromLTRB(20, 24, 20, 20),
             decoration: BoxDecoration(
-              color: colorScheme.primary.withValues(alpha: 0.1),
-              shape: BoxShape.circle,
+              gradient: isDark ? SynapseGradients.heroDark : SynapseGradients.hero,
             ),
-            child: Icon(
-              Icons.psychology_rounded,
-              size: 40,
-              color: colorScheme.primary,
+            child: Column(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: const BoxDecoration(
+                    gradient: SynapseGradients.accent,
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.psychology_rounded,
+                    size: 40,
+                    color: Colors.white,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'Synapse',
+                  style: GoogleFonts.fraunces(
+                    fontSize: 28,
+                    fontWeight: FontWeight.w700,
+                    color: colorScheme.onSurface,
+                    letterSpacing: -0.5,
+                    height: 1.15,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Your Second Brain. Wired by AI.',
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: SynapseColors.accent,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
             ),
           ),
-          const SizedBox(height: 16),
-          ShaderMask(
-            shaderCallback: (bounds) =>
-                SynapseColors.gradientPrimary.createShader(bounds),
-            child: Text(
-              'Synapse',
-              style: theme.textTheme.headlineMedium
-                  ?.copyWith(color: Colors.white),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+            child: Column(
+              children: [
+                Text(
+                  'Version 2.0.0',
+                  style: theme.textTheme.bodySmall,
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'Capture thoughts from any app. AI-powered neural wiring, OCR, and deep recall.',
+                  style: theme.textTheme.bodySmall,
+                  textAlign: TextAlign.center,
+                ),
+              ],
             ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'Your Second Brain. Wired by AI.',
-            style: theme.textTheme.bodyMedium?.copyWith(
-              color: colorScheme.primary,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Version 2.0.0',
-            style: theme.textTheme.bodySmall,
-          ),
-          const SizedBox(height: 12),
-          Text(
-            'Capture thoughts from any app. AI-powered neural wiring, OCR, and deep recall.',
-            style: theme.textTheme.bodySmall,
-            textAlign: TextAlign.center,
           ),
         ],
       ),

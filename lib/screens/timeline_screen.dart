@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:timeago/timeago.dart' as timeago;
 import 'package:cached_network_image/cached_network_image.dart';
@@ -13,73 +14,70 @@ class TimelineScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-    final isGlass = SynapseStyle.of(context);
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    return Scaffold(
-      extendBodyBehindAppBar: isGlass,
-      appBar: AppBar(
-        title: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.timeline_rounded, color: colorScheme.primary, size: 22),
-            const SizedBox(width: 8),
-            Text('Timeline', style: theme.appBarTheme.titleTextStyle),
-          ],
-        ),
+    return Container(
+      decoration: BoxDecoration(
+        gradient: isDark ? SynapseGradients.timelineBgDark : SynapseGradients.timelineBg,
       ),
-      body: Container(
-        decoration: isGlass
-            ? BoxDecoration(
-                gradient: isDark
-                    ? SynapseColors.gradientAurora
-                    : SynapseColors.gradientAuroraLight,
-              )
-            : null,
-        child: Consumer<SynapseProvider>(
-          builder: (context, provider, _) {
-            if (provider.isLoading) {
-              return const Center(child: CircularProgressIndicator());
-            }
-
-            final allThoughts = List<Thought>.from(provider.items)
-              ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
-
-            if (allThoughts.isEmpty) {
-              return _buildEmptyState(theme, colorScheme);
-            }
-
-            final grouped = _groupByDatePeriod(allThoughts);
-
-            return ListView.builder(
-              padding: EdgeInsets.fromLTRB(
-                0,
-                isGlass ? kToolbarHeight + MediaQuery.of(context).padding.top + 8 : 8,
-                16,
-                40,
+      child: SafeArea(
+        bottom: false,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 14, 16, 10),
+              child: Text(
+                'Recall',
+                style: GoogleFonts.fraunces(
+                  fontSize: 28,
+                  fontWeight: FontWeight.w800,
+                  color: isDark ? SynapseColors.darkInk : SynapseColors.ink,
+                  letterSpacing: -0.5,
+                ),
               ),
-              itemCount: grouped.length,
-              itemBuilder: (context, index) {
-                final entry = grouped[index];
-                return _buildPeriodSection(
-                  context,
-                  theme,
-                  colorScheme,
-                  entry.period,
-                  entry.thoughts,
-                  provider,
-                );
-              },
-            );
-          },
+            ),
+            Expanded(
+              child: Consumer<SynapseProvider>(
+                builder: (context, provider, _) {
+                  if (provider.isLoading) {
+                    return Center(
+                      child: CircularProgressIndicator(
+                        color: SynapseColors.accent,
+                        strokeWidth: 2,
+                      ),
+                    );
+                  }
+
+                  final allThoughts = List<Thought>.from(provider.items)
+                    ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+
+                  if (allThoughts.isEmpty) {
+                    return _buildEmptyState(isDark);
+                  }
+
+                  final grouped = _groupByDatePeriod(allThoughts);
+
+                  return ListView.builder(
+                    padding: const EdgeInsets.fromLTRB(0, 8, 16, 100),
+                    itemCount: grouped.length,
+                    itemBuilder: (context, index) {
+                      final entry = grouped[index];
+                      return _buildPeriodSection(
+                        context, isDark, entry.period, entry.thoughts, provider,
+                      );
+                    },
+                  );
+                },
+              ),
+            ),
+          ],
         ),
       ),
     );
   }
 
-  Widget _buildEmptyState(ThemeData theme, ColorScheme colorScheme) {
+  Widget _buildEmptyState(bool isDark) {
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(48),
@@ -87,27 +85,36 @@ class TimelineScreen extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Container(
-              padding: const EdgeInsets.all(24),
+              width: 80,
+              height: 80,
               decoration: BoxDecoration(
-                color: SynapseColors.neuroPurple.withValues(alpha: 0.08),
+                color: SynapseColors.skyBlueLight,
                 shape: BoxShape.circle,
               ),
-              child: ShaderMask(
-                shaderCallback: (bounds) =>
-                    SynapseColors.gradientPrimary.createShader(bounds),
-                child: Icon(
-                  Icons.timeline_rounded,
-                  size: 64,
-                  color: Colors.white,
-                ),
+              child: Icon(
+                Icons.timeline_rounded,
+                size: 36,
+                color: SynapseColors.ink.withValues(alpha: 0.25),
               ),
             ),
             const SizedBox(height: 24),
-            Text('No memories yet', style: theme.textTheme.headlineSmall),
+            Text(
+              'No memories yet',
+              style: GoogleFonts.fraunces(
+                fontSize: 24,
+                fontWeight: FontWeight.w800,
+                color: isDark ? SynapseColors.darkInk : SynapseColors.ink,
+                height: 1.2,
+              ),
+            ),
             const SizedBox(height: 8),
             Text(
-              'Your neural timeline will appear here\nonce the first synapses fire.',
-              style: theme.textTheme.bodyMedium,
+              'Your timeline will appear here\nonce you start saving memories.',
+              style: GoogleFonts.dmSans(
+                fontSize: 14,
+                color: SynapseColors.inkMuted,
+                height: 1.5,
+              ),
               textAlign: TextAlign.center,
             ),
           ],
@@ -146,29 +153,18 @@ class TimelineScreen extends StatelessWidget {
     }
 
     final groups = <_TimelineGroup>[];
-    if (today.isNotEmpty) {
-      groups.add(_TimelineGroup(period: 'Today', thoughts: today));
-    }
-    if (yesterday.isNotEmpty) {
-      groups.add(_TimelineGroup(period: 'Yesterday', thoughts: yesterday));
-    }
-    if (thisWeek.isNotEmpty) {
-      groups.add(_TimelineGroup(period: 'This Week', thoughts: thisWeek));
-    }
-    if (thisMonth.isNotEmpty) {
-      groups.add(_TimelineGroup(period: 'This Month', thoughts: thisMonth));
-    }
-    if (older.isNotEmpty) {
-      groups.add(_TimelineGroup(period: 'Older', thoughts: older));
-    }
+    if (today.isNotEmpty) groups.add(_TimelineGroup(period: 'Today', thoughts: today));
+    if (yesterday.isNotEmpty) groups.add(_TimelineGroup(period: 'Yesterday', thoughts: yesterday));
+    if (thisWeek.isNotEmpty) groups.add(_TimelineGroup(period: 'This Week', thoughts: thisWeek));
+    if (thisMonth.isNotEmpty) groups.add(_TimelineGroup(period: 'This Month', thoughts: thisMonth));
+    if (older.isNotEmpty) groups.add(_TimelineGroup(period: 'Older', thoughts: older));
 
     return groups;
   }
 
   Widget _buildPeriodSection(
     BuildContext context,
-    ThemeData theme,
-    ColorScheme colorScheme,
+    bool isDark,
     String period,
     List<Thought> thoughts,
     SynapseProvider provider,
@@ -179,37 +175,30 @@ class TimelineScreen extends StatelessWidget {
         Padding(
           padding: const EdgeInsets.fromLTRB(24, 16, 16, 8),
           child: Row(
+            crossAxisAlignment: CrossAxisAlignment.baseline,
+            textBaseline: TextBaseline.alphabetic,
             children: [
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(
-                  color: SynapseColors.neuroPurple.withValues(alpha: 0.10),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text(
-                  period,
-                  style: theme.textTheme.titleLarge?.copyWith(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                    color: SynapseColors.neuroPurple,
-                  ),
+              Text(
+                period,
+                style: GoogleFonts.fraunces(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w700,
+                  color: isDark ? SynapseColors.darkInk : SynapseColors.ink,
                 ),
               ),
               const SizedBox(width: 8),
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
                 decoration: BoxDecoration(
-                  color: colorScheme.onSurface.withValues(alpha: 0.06),
-                  borderRadius: BorderRadius.circular(10),
+                  color: SynapseColors.skyBlueLight,
+                  borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
                   '${thoughts.length}',
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                    color: colorScheme.onSurface.withValues(alpha: 0.5),
+                  style: GoogleFonts.dmSans(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: const Color(0xFF6BA3D6),
                   ),
                 ),
               ),
@@ -220,15 +209,7 @@ class TimelineScreen extends StatelessWidget {
           final index = entry.key;
           final thought = entry.value;
           final isLast = index == thoughts.length - 1;
-
-          return _buildTimelineNode(
-            context,
-            theme,
-            colorScheme,
-            thought,
-            isLast,
-            provider,
-          );
+          return _buildTimelineNode(context, isDark, thought, isLast, provider);
         }),
       ],
     );
@@ -236,18 +217,18 @@ class TimelineScreen extends StatelessWidget {
 
   Widget _buildTimelineNode(
     BuildContext context,
-    ThemeData theme,
-    ColorScheme colorScheme,
+    bool isDark,
     Thought thought,
     bool isLast,
     SynapseProvider provider,
   ) {
+    final catTint = SynapseColors.categoryTint(thought.category, dark: isDark);
+
     return IntrinsicHeight(
       child: GestureDetector(
         onTap: () {
           final allThoughts = List<Thought>.from(provider.items);
           final idx = allThoughts.indexWhere((i) => i.id == thought.id);
-
           Navigator.push(
             context,
             SynapsePageRoute(
@@ -267,29 +248,12 @@ class TimelineScreen extends StatelessWidget {
               child: Column(
                 children: [
                   Container(
-                    width: 14,
-                    height: 14,
-                    margin: const EdgeInsets.only(top: 14),
+                    width: 12,
+                    height: 12,
+                    margin: const EdgeInsets.only(top: 16),
                     decoration: BoxDecoration(
-                      color: SynapseColors.neuroPurple,
+                      color: SynapseColors.categoryAccent(thought.category),
                       shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: SynapseColors.neuroPurple.withValues(alpha: 0.3),
-                          blurRadius: 6,
-                          offset: const Offset(0, 2),
-                        ),
-                      ],
-                    ),
-                    child: Center(
-                      child: Container(
-                        width: 6,
-                        height: 6,
-                        decoration: const BoxDecoration(
-                          color: Colors.white,
-                          shape: BoxShape.circle,
-                        ),
-                      ),
                     ),
                   ),
                   if (!isLast)
@@ -297,7 +261,7 @@ class TimelineScreen extends StatelessWidget {
                       child: Container(
                         width: 2,
                         margin: const EdgeInsets.symmetric(vertical: 4),
-                        color: SynapseColors.neuroPurple.withValues(alpha: 0.20),
+                        color: SynapseColors.ink.withValues(alpha: 0.06),
                       ),
                     ),
                 ],
@@ -308,22 +272,12 @@ class TimelineScreen extends StatelessWidget {
                 margin: const EdgeInsets.only(bottom: 8),
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: colorScheme.surfaceContainerHighest,
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(
-                    color: colorScheme.outlineVariant.withValues(alpha: 0.15),
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: colorScheme.shadow.withValues(alpha: 0.03),
-                      blurRadius: 8,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
+                  color: isDark ? SynapseColors.darkCard : catTint,
+                  borderRadius: BorderRadius.circular(18),
                 ),
                 child: Row(
                   children: [
-                    _buildThumbnail(thought, colorScheme),
+                    _buildThumbnail(thought),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Column(
@@ -331,51 +285,32 @@ class TimelineScreen extends StatelessWidget {
                         children: [
                           Text(
                             thought.displayTitle,
-                            style: theme.textTheme.titleLarge?.copyWith(
+                            style: GoogleFonts.dmSans(
                               fontSize: 14,
+                              fontWeight: FontWeight.w600,
                               height: 1.3,
+                              color: isDark
+                                  ? SynapseColors.darkInk
+                                  : SynapseColors.ink,
                             ),
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
                           ),
                           const SizedBox(height: 4),
-                          Row(
-                            children: [
-                              Icon(
-                                Icons.access_time_rounded,
-                                size: 12,
-                                color: colorScheme.onSurface
-                                    .withValues(alpha: 0.4),
-                              ),
-                              const SizedBox(width: 4),
-                              Text(
-                                timeago.format(thought.createdAt),
-                                style: theme.textTheme.bodySmall?.copyWith(
-                                  fontSize: 11,
-                                  color: colorScheme.onSurface
-                                      .withValues(alpha: 0.5),
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Icon(
-                                thought.type == ThoughtType.link
-                                    ? Icons.link_rounded
-                                    : Icons.image_rounded,
-                                size: 12,
-                                color: colorScheme.onSurface
-                                    .withValues(alpha: 0.4),
-                              ),
-                            ],
+                          Text(
+                            timeago.format(thought.createdAt),
+                            style: GoogleFonts.dmSans(
+                              fontSize: 11,
+                              color: SynapseColors.inkMuted,
+                            ),
                           ),
-                          const SizedBox(height: 4),
-                          _buildCategoryBadge(thought, colorScheme),
                         ],
                       ),
                     ),
                     Icon(
                       Icons.chevron_right_rounded,
                       size: 18,
-                      color: colorScheme.onSurface.withValues(alpha: 0.25),
+                      color: SynapseColors.inkFaint,
                     ),
                   ],
                 ),
@@ -387,84 +322,49 @@ class TimelineScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildThumbnail(Thought thought, ColorScheme colorScheme) {
-    Widget thumbnail;
-
-    if (thought.type == ThoughtType.screenshot &&
-        thought.imagePath != null) {
-      thumbnail = ClipRRect(
+  Widget _buildThumbnail(Thought thought) {
+    if (thought.type == ThoughtType.screenshot && thought.imagePath != null) {
+      return ClipRRect(
         borderRadius: BorderRadius.circular(8),
         child: Image.file(
           File(thought.imagePath!),
-          width: 40,
-          height: 40,
-          fit: BoxFit.cover,
-          errorBuilder: (context, error, stackTrace) =>
-              _buildIconThumbnail(Icons.broken_image_rounded, colorScheme),
+          width: 40, height: 40, fit: BoxFit.cover,
+          errorBuilder: (c, e, s) => _buildIconThumbnail(
+            Icons.broken_image_rounded, thought.category,
+          ),
         ),
       );
     } else if (thought.previewImageUrl != null &&
         thought.previewImageUrl!.isNotEmpty) {
-      thumbnail = ClipRRect(
+      return ClipRRect(
         borderRadius: BorderRadius.circular(8),
         child: CachedNetworkImage(
           imageUrl: thought.previewImageUrl!,
-          width: 40,
-          height: 40,
-          fit: BoxFit.cover,
-          errorWidget: (context, url, error) =>
-              _buildIconThumbnail(Icons.language_rounded, colorScheme),
+          width: 40, height: 40, fit: BoxFit.cover,
+          errorWidget: (c, u, e) => _buildIconThumbnail(
+            Icons.language_rounded, thought.category,
+          ),
         ),
       );
-    } else if (thought.type == ThoughtType.link) {
-      thumbnail =
-          _buildIconThumbnail(Icons.link_rounded, colorScheme);
-    } else {
-      thumbnail =
-          _buildIconThumbnail(Icons.image_rounded, colorScheme);
     }
-
-    return thumbnail;
+    return _buildIconThumbnail(
+      thought.type == ThoughtType.link
+          ? Icons.link_rounded
+          : Icons.image_rounded,
+      thought.category,
+    );
   }
 
-  Widget _buildIconThumbnail(IconData icon, ColorScheme colorScheme) {
+  Widget _buildIconThumbnail(IconData icon, ThoughtCategory cat) {
     return Container(
       width: 40,
       height: 40,
       decoration: BoxDecoration(
-        color: SynapseColors.neuroPurple.withValues(alpha: 0.08),
+        color: SynapseColors.categoryAccent(cat).withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(8),
       ),
-      child: Icon(icon, size: 20, color: SynapseColors.neuroPurple.withValues(alpha: 0.5)),
-    );
-  }
-
-  Widget _buildCategoryBadge(Thought thought, ColorScheme colorScheme) {
-    if (thought.category == ThoughtCategory.other && !thought.isClassified) {
-      return const SizedBox.shrink();
-    }
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-      decoration: BoxDecoration(
-        color: SynapseColors.neuroPurple.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(thought.category.emoji, style: const TextStyle(fontSize: 9)),
-          const SizedBox(width: 3),
-          Text(
-            thought.category.label,
-            style: TextStyle(
-              fontSize: 10,
-              fontWeight: FontWeight.w600,
-              color: SynapseColors.neuroPurple,
-            ),
-          ),
-        ],
-      ),
+      child: Icon(icon, size: 20,
+          color: SynapseColors.categoryAccent(cat).withValues(alpha: 0.5)),
     );
   }
 }
@@ -472,9 +372,5 @@ class TimelineScreen extends StatelessWidget {
 class _TimelineGroup {
   final String period;
   final List<Thought> thoughts;
-
-  const _TimelineGroup({
-    required this.period,
-    required this.thoughts,
-  });
+  const _TimelineGroup({required this.period, required this.thoughts});
 }

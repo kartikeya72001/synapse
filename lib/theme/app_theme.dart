@@ -1,294 +1,426 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../models/thought.dart';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Colors — clean white / deep black, no yellow hue
+// ─────────────────────────────────────────────────────────────────────────────
 
 class SynapseColors {
-  // Primary palette — deep violet spectrum
-  static const neuroPurple = Color(0xFF6D28D9);
-  static const neuroViolet = Color(0xFF7C3AED);
-  static const synapseBlue = Color(0xFF2563EB);
-  static const synapseCyan = Color(0xFF0891B2);
+  SynapseColors._();
 
-  // Accent palette — warm counterpoints
-  static const cortexTeal = Color(0xFF0D9488);
-  static const plasmaGreen = Color(0xFF059669);
-  static const neuralPink = Color(0xFFDB2777);
-  static const axonAmber = Color(0xFFD97706);
-  static const axonOrange = Color(0xFFF59E0B);
+  // Light ink hierarchy
+  static const Color ink = Color(0xFF1A1A1A);
+  static const Color inkLight = Color(0xFF3D3D3D);
+  static const Color inkMuted = Color(0xFF8E8E93);
+  static const Color inkFaint = Color(0xFFC7C7CC);
 
-  // Dark surfaces — deep navy-midnight tones
-  static const darkSurface = Color(0xFF08081A);
-  static const darkCard = Color(0xFF111128);
-  static const darkCardBorder = Color(0xFF1E1E42);
-  static const darkElevated = Color(0xFF151530);
+  // Accent — vibrant purple
+  static const Color accent = Color(0xFFA371F2);
+  static const Color accentDark = Color(0xFF8B5BD8);
+  static const Color accentSoft = Color(0xFFD4C4F0);
+  static const Color accentBg = Color(0xFFEDE4F8);
 
-  // Light surfaces — cool lavender whites
-  static const lightSurface = Color(0xFFF5F3FF);
-  static const lightCard = Color(0xFFFFFFFF);
-  static const lightCardBorder = Color(0xFFE0DAFB);
-  static const lightElevated = Color(0xFFEDE9FF);
+  // Backgrounds — pure white, zero warmth
+  static const Color lightBg = Color(0xFFFFFFFF);
+  static const Color lightCard = Color(0xFFF5F5F7);
 
-  static const gradientPrimary = LinearGradient(
-    colors: [Color(0xFF7C3AED), Color(0xFF4F46E5)],
-    begin: Alignment.topLeft,
-    end: Alignment.bottomRight,
+  // Vibrant pastels
+  static const Color peach = Color(0xFFFFD6BA);
+  static const Color peachLight = Color(0xFFFFEBDD);
+  static const Color lavenderWash = Color(0xFFE5DAFA);
+  static const Color lavenderLight = Color(0xFFF0EAFC);
+  static const Color blush = Color(0xFFF8E0F0);
+  static const Color mint = Color(0xFFD4F0E4);
+  static const Color mintLight = Color(0xFFE8F7F0);
+  static const Color skyBlue = Color(0xFFD6E8F8);
+  static const Color skyBlueLight = Color(0xFFE8F2FC);
+  static const Color coral = Color(0xFFFDD8D8);
+  static const Color coralLight = Color(0xFFFFECEC);
+
+  static const Color error = Color(0xFFFF3B30);
+  static const Color success = Color(0xFF34C759);
+
+  // Dark theme — true deep blacks, no brown
+  static const Color darkBg = Color(0xFF000000);
+  static const Color darkSurface = Color(0xFF1C1C1E);
+  static const Color darkCard = Color(0xFF2C2C2E);
+  static const Color darkElevated = Color(0xFF3A3A3C);
+  static const Color darkInk = Color(0xFFF2F2F7);
+  static const Color darkInkMuted = Color(0xFF98989D);
+  static const Color darkAccent = Color(0xFFBF9EF7);
+
+  // Dark pastels — vibrant versions for dark mode
+  static const Color darkPeach = Color(0xFF3D2A1F);
+  static const Color darkLavender = Color(0xFF2D2440);
+  static const Color darkMint = Color(0xFF1A3028);
+  static const Color darkSky = Color(0xFF1A2838);
+  static const Color darkCoral = Color(0xFF3D1F1F);
+
+  static Color categoryTint(ThoughtCategory cat, {bool dark = false}) {
+    if (dark) return _darkCategoryTint(cat);
+    switch (cat) {
+      case ThoughtCategory.socialMedia:
+      case ThoughtCategory.family:
+        return peachLight;
+      case ThoughtCategory.tool:
+      case ThoughtCategory.product:
+      case ThoughtCategory.reference:
+        return lavenderLight;
+      case ThoughtCategory.travel:
+      case ThoughtCategory.vacation:
+        return skyBlueLight;
+      case ThoughtCategory.recipe:
+      case ThoughtCategory.health:
+        return mintLight;
+      case ThoughtCategory.news:
+      case ThoughtCategory.article:
+        return const Color(0xFFFFF5E0);
+      case ThoughtCategory.video:
+      case ThoughtCategory.entertainment:
+      case ThoughtCategory.music:
+        return coralLight;
+      case ThoughtCategory.education:
+      case ThoughtCategory.stocks:
+      case ThoughtCategory.finance:
+        return skyBlueLight;
+      case ThoughtCategory.inspiration:
+      case ThoughtCategory.game:
+      case ThoughtCategory.sports:
+        return mintLight;
+      case ThoughtCategory.image:
+      case ThoughtCategory.todo:
+      case ThoughtCategory.other:
+        return lightCard;
+    }
+  }
+
+  static Color _darkCategoryTint(ThoughtCategory cat) {
+    switch (cat) {
+      case ThoughtCategory.socialMedia:
+      case ThoughtCategory.family:
+        return darkPeach;
+      case ThoughtCategory.tool:
+      case ThoughtCategory.product:
+      case ThoughtCategory.reference:
+        return darkLavender;
+      case ThoughtCategory.travel:
+      case ThoughtCategory.vacation:
+      case ThoughtCategory.education:
+      case ThoughtCategory.stocks:
+      case ThoughtCategory.finance:
+        return darkSky;
+      case ThoughtCategory.recipe:
+      case ThoughtCategory.health:
+      case ThoughtCategory.inspiration:
+      case ThoughtCategory.game:
+      case ThoughtCategory.sports:
+        return darkMint;
+      case ThoughtCategory.news:
+      case ThoughtCategory.article:
+        return const Color(0xFF332A14);
+      case ThoughtCategory.video:
+      case ThoughtCategory.entertainment:
+      case ThoughtCategory.music:
+        return darkCoral;
+      case ThoughtCategory.image:
+      case ThoughtCategory.todo:
+      case ThoughtCategory.other:
+        return darkCard;
+    }
+  }
+
+  static Color categoryAccent(ThoughtCategory cat) {
+    switch (cat) {
+      case ThoughtCategory.socialMedia:
+      case ThoughtCategory.family:
+        return const Color(0xFFE8A87C);
+      case ThoughtCategory.tool:
+      case ThoughtCategory.product:
+      case ThoughtCategory.reference:
+        return accent;
+      case ThoughtCategory.travel:
+      case ThoughtCategory.vacation:
+        return const Color(0xFF6BA3D6);
+      case ThoughtCategory.recipe:
+      case ThoughtCategory.health:
+        return success;
+      case ThoughtCategory.news:
+      case ThoughtCategory.article:
+        return const Color(0xFFD4A843);
+      case ThoughtCategory.video:
+      case ThoughtCategory.entertainment:
+      case ThoughtCategory.music:
+        return const Color(0xFFE07070);
+      case ThoughtCategory.education:
+      case ThoughtCategory.stocks:
+      case ThoughtCategory.finance:
+        return const Color(0xFF5B9BD5);
+      default:
+        return inkMuted;
+    }
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Gradients — vibrant pastel backgrounds, clean endpoints
+// ─────────────────────────────────────────────────────────────────────────────
+
+class SynapseGradients {
+  SynapseGradients._();
+
+  static const LinearGradient hero = LinearGradient(
+    begin: Alignment(-0.8, -0.6),
+    end: Alignment(0.8, 0.8),
+    colors: [SynapseColors.lavenderWash, SynapseColors.blush, Colors.white],
   );
 
-  static const gradientAccent = LinearGradient(
-    colors: [Color(0xFF4F46E5), Color(0xFF0891B2)],
-    begin: Alignment.topLeft,
-    end: Alignment.bottomRight,
+  static const LinearGradient heroDark = LinearGradient(
+    begin: Alignment(-0.8, -0.6),
+    end: Alignment(0.8, 0.8),
+    colors: [Color(0xFF1A1030), Color(0xFF000000)],
   );
 
-  static const gradientWarm = LinearGradient(
-    colors: [Color(0xFF7C3AED), Color(0xFFDB2777)],
+  static const LinearGradient accent = LinearGradient(
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
+    colors: [SynapseColors.accent, SynapseColors.accentDark],
   );
 
-  static const gradientDarkBg = LinearGradient(
+  static const LinearGradient chatBg = LinearGradient(
     begin: Alignment.topCenter,
     end: Alignment.bottomCenter,
-    colors: [Color(0xFF0C0B24), Color(0xFF08081A)],
+    colors: [Color(0xFFF0EAFC), Colors.white],
   );
 
-  static const gradientAurora = LinearGradient(
+  static const LinearGradient chatBgDark = LinearGradient(
+    begin: Alignment.topCenter,
+    end: Alignment.bottomCenter,
+    colors: [Color(0xFF12101A), Color(0xFF000000)],
+  );
+
+  static const LinearGradient libraryBg = LinearGradient(
+    begin: Alignment.topCenter,
+    end: Alignment.bottomCenter,
+    colors: [Color(0xFFFFEBDD), Colors.white],
+  );
+
+  static const LinearGradient libraryBgDark = LinearGradient(
+    begin: Alignment.topCenter,
+    end: Alignment.bottomCenter,
+    colors: [Color(0xFF1A1410), Color(0xFF000000)],
+  );
+
+  static const LinearGradient timelineBg = LinearGradient(
+    begin: Alignment.topCenter,
+    end: Alignment.bottomCenter,
+    colors: [Color(0xFFE8F2FC), Colors.white],
+  );
+
+  static const LinearGradient timelineBgDark = LinearGradient(
+    begin: Alignment.topCenter,
+    end: Alignment.bottomCenter,
+    colors: [Color(0xFF0D1520), Color(0xFF000000)],
+  );
+
+  static const LinearGradient vaultBg = LinearGradient(
+    begin: Alignment.topCenter,
+    end: Alignment.bottomCenter,
+    colors: [Color(0xFFFFECEC), Colors.white],
+  );
+
+  static const LinearGradient vaultBgDark = LinearGradient(
+    begin: Alignment.topCenter,
+    end: Alignment.bottomCenter,
+    colors: [Color(0xFF1A0D0D), Color(0xFF000000)],
+  );
+
+  static const LinearGradient settingsBg = LinearGradient(
+    begin: Alignment.topCenter,
+    end: Alignment.bottomCenter,
+    colors: [Color(0xFFF0EAFC), Colors.white],
+  );
+
+  static const LinearGradient settingsBgDark = LinearGradient(
+    begin: Alignment.topCenter,
+    end: Alignment.bottomCenter,
+    colors: [Color(0xFF12101A), Color(0xFF000000)],
+  );
+
+  static const LinearGradient peachWash = LinearGradient(
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
-    stops: [0.0, 0.35, 0.65, 1.0],
-    colors: [
-      Color(0xFF120B28),
-      Color(0xFF0D0E2D),
-      Color(0xFF0A0C24),
-      Color(0xFF0E0920),
-    ],
+    colors: [SynapseColors.peachLight, Color(0xFFFFF8F4)],
   );
 
-  static const gradientAuroraLight = LinearGradient(
-    begin: Alignment.topLeft,
-    end: Alignment.bottomRight,
-    stops: [0.0, 0.35, 0.65, 1.0],
-    colors: [
-      Color(0xFFEBE5FF),
-      Color(0xFFE0E6FF),
-      Color(0xFFE5ECFF),
-      Color(0xFFEDE8FF),
-    ],
-  );
+  static LinearGradient imageOverlay({bool dark = false}) => LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: dark
+            ? [Colors.transparent, Colors.black54, Colors.black87]
+            : [Colors.transparent, Colors.white70, Colors.white],
+        stops: const [0.35, 0.75, 1.0],
+      );
+
+  static LinearGradient categoryCard(ThoughtCategory cat, {bool dark = false}) =>
+      LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [
+          SynapseColors.categoryTint(cat, dark: dark),
+          dark ? SynapseColors.darkCard : Colors.white,
+        ],
+      );
 }
 
-/// Shared glassmorphism tokens for [GlassDecoration], [FrostedGlass], and [AppTheme].
-class SynapseGlass {
-  SynapseGlass._();
+// ─────────────────────────────────────────────────────────────────────────────
+// Shadows
+// ─────────────────────────────────────────────────────────────────────────────
 
-  static const double blurSigma = 20;
-  static const double cardRadius = 18;
-  static const double borderWidthThin = 0.5;
+class SynapseShadows {
+  SynapseShadows._();
 
-  /// Card / flat glass tint (dark).
-  static const double fillCardDark = 0.05;
+  static const List<BoxShadow> none = [];
 
-  /// Card / flat glass tint (light).
-  static const double fillCardLight = 0.55;
+  static List<BoxShadow> get soft => [
+        BoxShadow(
+          color: Colors.black.withValues(alpha: 0.04),
+          blurRadius: 8,
+          offset: const Offset(0, 2),
+        ),
+      ];
 
-  /// Elevated glass tint (dark) — blurred panels, chips, ColorScheme surface.
-  static const double fillElevatedDark = 0.06;
+  static List<BoxShadow> get elevated => [
+        BoxShadow(
+          color: Colors.black.withValues(alpha: 0.06),
+          blurRadius: 16,
+          offset: const Offset(0, 6),
+        ),
+      ];
 
-  /// Frosted panel fill (dark / light).
-  static const double fillFrostedDark = 0.04;
-  static const double fillFrostedLight = 0.45;
+  static List<BoxShadow> get glow => [
+        BoxShadow(
+          color: SynapseColors.accent.withValues(alpha: 0.2),
+          blurRadius: 20,
+          offset: const Offset(0, 4),
+        ),
+      ];
 
-  /// Text field glass fill (light).
-  static const double fillInputLightGlass = 0.40;
-
-  /// Chip background (light glass).
-  static const double fillChipLightGlass = 0.5;
-
-  /// Standard glass border (dark).
-  static const double borderDark = 0.08;
-
-  /// Card border (light) — [GlassDecoration.card].
-  static const double borderLightCard = 0.65;
-
-  /// Theme Material surfaces (card border, chips, buttons) — light glass.
-  static const double borderLightMaterial = 0.6;
-
-  /// Frosted / backdrop border (light).
-  static const double borderFrostedLight = 0.7;
-
-  /// Backdrop blur overlay border (dark).
-  static const double borderBackdropDark = 0.10;
-
-  /// Outlined button border (dark glass).
-  static const double borderOutlinedDarkGlass = 0.12;
+  static List<BoxShadow> get softDark => [
+        BoxShadow(
+          color: Colors.black.withValues(alpha: 0.3),
+          blurRadius: 8,
+          offset: const Offset(0, 2),
+        ),
+      ];
 }
 
-class GlassDecoration {
-  static BoxDecoration card({
-    required Brightness brightness,
-    bool isGlass = false,
-    double radius = SynapseGlass.cardRadius,
-  }) {
-    final isDark = brightness == Brightness.dark;
-    if (isGlass) {
-      return BoxDecoration(
-        color: isDark
-            ? Colors.white.withValues(alpha: SynapseGlass.fillCardDark)
-            : Colors.white.withValues(alpha: SynapseGlass.fillCardLight),
-        borderRadius: BorderRadius.circular(radius),
+// ─────────────────────────────────────────────────────────────────────────────
+// Decoration helpers
+// ─────────────────────────────────────────────────────────────────────────────
+
+class SynapseDecoration {
+  SynapseDecoration._();
+
+  static BoxDecoration card({bool dark = false}) => BoxDecoration(
+        color: dark ? SynapseColors.darkCard : SynapseColors.lightCard,
+        borderRadius: BorderRadius.circular(20),
+      );
+
+  static BoxDecoration elevatedCard({bool dark = false}) => BoxDecoration(
+        color: dark ? SynapseColors.darkElevated : Colors.white,
+        borderRadius: BorderRadius.circular(22),
+        boxShadow: dark ? SynapseShadows.softDark : SynapseShadows.soft,
+      );
+
+  static BoxDecoration frostedCard({bool dark = false}) => BoxDecoration(
+        color: (dark ? SynapseColors.darkCard : Colors.white)
+            .withValues(alpha: 0.85),
+        borderRadius: BorderRadius.circular(20),
         border: Border.all(
-          color: isDark
-              ? Colors.white.withValues(alpha: SynapseGlass.borderDark)
-              : Colors.white.withValues(alpha: SynapseGlass.borderLightCard),
-          width: SynapseGlass.borderWidthThin,
+          color: (dark ? Colors.white : Colors.black).withValues(alpha: 0.05),
         ),
       );
-    }
-    return BoxDecoration(
-      color: isDark ? SynapseColors.darkCard : SynapseColors.lightCard,
-      borderRadius: BorderRadius.circular(radius),
-      border: Border.all(
-        color: isDark
-            ? SynapseColors.darkCardBorder
-            : SynapseColors.lightCardBorder,
-        width: SynapseGlass.borderWidthThin,
-      ),
-      boxShadow: isDark
-          ? null
-          : [
-              BoxShadow(
-                color: SynapseColors.neuroPurple.withValues(alpha: 0.04),
-                blurRadius: 16,
-                offset: const Offset(0, 4),
-              ),
-            ],
-    );
-  }
 
-  static BoxDecoration frosted({
-    required Brightness brightness,
-    double radius = SynapseGlass.cardRadius,
-  }) {
-    final isDark = brightness == Brightness.dark;
-    return BoxDecoration(
-      color: isDark
-          ? Colors.white.withValues(alpha: SynapseGlass.fillFrostedDark)
-          : Colors.white.withValues(alpha: SynapseGlass.fillFrostedLight),
-      borderRadius: BorderRadius.circular(radius),
-      border: Border.all(
-        color: isDark
-            ? Colors.white.withValues(alpha: SynapseGlass.borderDark)
-            : Colors.white.withValues(alpha: SynapseGlass.borderFrostedLight),
-        width: SynapseGlass.borderWidthThin,
-      ),
-    );
-  }
+  static BoxDecoration pastelCard({
+    required ThoughtCategory category,
+    bool dark = false,
+  }) =>
+      BoxDecoration(
+        gradient: SynapseGradients.categoryCard(category, dark: dark),
+        borderRadius: BorderRadius.circular(20),
+      );
+
+  static BoxDecoration accentSection({bool dark = false}) => BoxDecoration(
+        color: dark ? SynapseColors.darkCard : SynapseColors.lavenderLight,
+        borderRadius: BorderRadius.circular(20),
+      );
+
+  static BoxDecoration pill({
+    required bool active,
+    bool dark = false,
+  }) =>
+      BoxDecoration(
+        color: active
+            ? SynapseColors.ink
+            : (dark ? SynapseColors.darkCard : Colors.white),
+        borderRadius: BorderRadius.circular(100),
+        border: active
+            ? null
+            : Border.all(
+                color: (dark ? Colors.white : Colors.black)
+                    .withValues(alpha: 0.08),
+              ),
+      );
 }
 
-class FrostedGlass extends StatelessWidget {
-  final Widget child;
-  final double blur;
-  final double radius;
-  final EdgeInsetsGeometry? padding;
-  final EdgeInsetsGeometry? margin;
+// ─────────────────────────────────────────────────────────────────────────────
+// Frosted wrapper widget
+// ─────────────────────────────────────────────────────────────────────────────
 
-  const FrostedGlass({
+class FrostedContainer extends StatelessWidget {
+  final Widget child;
+  final double borderRadius;
+  final EdgeInsetsGeometry? padding;
+  final double sigma;
+
+  const FrostedContainer({
     super.key,
     required this.child,
-    this.blur = SynapseGlass.blurSigma,
-    this.radius = SynapseGlass.cardRadius,
+    this.borderRadius = 20,
     this.padding,
-    this.margin,
+    this.sigma = 12,
   });
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final isGlass = SynapseStyle.of(context);
-
-    if (!isGlass) {
-      return Container(
-        margin: margin,
-        padding: padding,
-        decoration: GlassDecoration.card(
-          brightness: Theme.of(context).brightness,
-          radius: radius,
-        ),
-        child: child,
-      );
-    }
-
-    return Padding(
-      padding: margin ?? EdgeInsets.zero,
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(radius),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: blur, sigmaY: blur),
-          child: Container(
-            padding: padding,
-            decoration: BoxDecoration(
-              color: isDark
-                  ? Colors.white.withValues(alpha: SynapseGlass.fillElevatedDark)
-                  : Colors.white.withValues(alpha: SynapseGlass.fillCardLight),
-              borderRadius: BorderRadius.circular(radius),
-              border: Border.all(
-                color: isDark
-                    ? Colors.white.withValues(alpha: SynapseGlass.borderBackdropDark)
-                    : Colors.white.withValues(alpha: SynapseGlass.borderFrostedLight),
-                width: SynapseGlass.borderWidthThin,
-              ),
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(borderRadius),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: sigma, sigmaY: sigma),
+        child: Container(
+          padding: padding,
+          decoration: BoxDecoration(
+            color: (isDark ? Colors.black : Colors.white)
+                .withValues(alpha: 0.75),
+            borderRadius: BorderRadius.circular(borderRadius),
+            border: Border.all(
+              color: (isDark ? Colors.white : Colors.black)
+                  .withValues(alpha: 0.06),
             ),
-            child: child,
           ),
+          child: child,
         ),
       ),
     );
   }
 }
 
-class GlassCard extends StatelessWidget {
-  final Widget child;
-  final EdgeInsetsGeometry? padding;
-  final EdgeInsetsGeometry? margin;
-  final double radius;
-
-  const GlassCard({
-    super.key,
-    required this.child,
-    this.padding,
-    this.margin,
-    this.radius = SynapseGlass.cardRadius,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return FrostedGlass(
-      radius: radius,
-      padding: padding,
-      margin: margin,
-      child: child,
-    );
-  }
-}
-
-class SynapseStyle extends InheritedWidget {
-  final bool isGlass;
-
-  const SynapseStyle({
-    super.key,
-    required this.isGlass,
-    required super.child,
-  });
-
-  static bool of(BuildContext context) {
-    final widget = context.dependOnInheritedWidgetOfExactType<SynapseStyle>();
-    return widget?.isGlass ?? false;
-  }
-
-  @override
-  bool updateShouldNotify(SynapseStyle oldWidget) =>
-      isGlass != oldWidget.isGlass;
-}
+// ─────────────────────────────────────────────────────────────────────────────
+// Page route
+// ─────────────────────────────────────────────────────────────────────────────
 
 class SynapsePageRoute<T> extends PageRouteBuilder<T> {
   SynapsePageRoute({required WidgetBuilder builder})
@@ -303,313 +435,184 @@ class SynapsePageRoute<T> extends PageRouteBuilder<T> {
               curve: Curves.easeOutCubic,
               reverseCurve: Curves.easeInCubic,
             );
-
             return FadeTransition(
               opacity: Tween<double>(begin: 0.0, end: 1.0).animate(curve),
-              child: child,
+              child: SlideTransition(
+                position: Tween<Offset>(
+                  begin: const Offset(0, 0.04),
+                  end: Offset.zero,
+                ).animate(curve),
+                child: child,
+              ),
             );
           },
         );
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Theme
+// ─────────────────────────────────────────────────────────────────────────────
+
 class AppTheme {
-  static final _lightColorScheme = ColorScheme.fromSeed(
-    seedColor: SynapseColors.neuroPurple,
-    brightness: Brightness.light,
-    primary: SynapseColors.neuroPurple,
-    secondary: SynapseColors.synapseCyan,
-    tertiary: SynapseColors.neuralPink,
-    surface: SynapseColors.lightSurface,
-    surfaceContainerHighest: SynapseColors.lightCard,
-    error: const Color(0xFFDC2626),
-  );
+  static ThemeData lightTheme() => _build(Brightness.light);
+  static ThemeData darkTheme() => _build(Brightness.dark);
 
-  static final _darkColorScheme = ColorScheme.fromSeed(
-    seedColor: SynapseColors.neuroPurple,
-    brightness: Brightness.dark,
-    primary: SynapseColors.neuroViolet,
-    secondary: SynapseColors.synapseCyan,
-    tertiary: SynapseColors.neuralPink,
-    surface: SynapseColors.darkSurface,
-    surfaceContainerHighest: SynapseColors.darkCard,
-    error: const Color(0xFFDC2626),
-  );
+  static ThemeData _build(Brightness brightness) {
+    final dark = brightness == Brightness.dark;
+    final base = dark ? ThemeData.dark() : ThemeData.light();
 
-  static final _glassLightColorScheme = ColorScheme.fromSeed(
-    seedColor: SynapseColors.neuroPurple,
-    brightness: Brightness.light,
-    primary: SynapseColors.neuroPurple,
-    secondary: SynapseColors.synapseCyan,
-    tertiary: SynapseColors.neuralPink,
-    surface: const Color(0x00000000),
-    surfaceContainerHighest:
-        Colors.white.withValues(alpha: SynapseGlass.fillCardLight),
-    error: const Color(0xFFDC2626),
-  );
+    final bg = dark ? SynapseColors.darkBg : SynapseColors.lightBg;
+    final card = dark ? SynapseColors.darkCard : SynapseColors.lightCard;
+    final ink = dark ? SynapseColors.darkInk : SynapseColors.ink;
+    final inkMuted =
+        dark ? SynapseColors.darkInkMuted : SynapseColors.inkMuted;
+    final accent = dark ? SynapseColors.darkAccent : SynapseColors.accent;
 
-  static final _glassDarkColorScheme = ColorScheme.fromSeed(
-    seedColor: SynapseColors.neuroPurple,
-    brightness: Brightness.dark,
-    primary: SynapseColors.neuroViolet,
-    secondary: SynapseColors.synapseCyan,
-    tertiary: SynapseColors.neuralPink,
-    surface: const Color(0x00000000),
-    surfaceContainerHighest:
-        Colors.white.withValues(alpha: SynapseGlass.fillElevatedDark),
-    error: const Color(0xFFDC2626),
-  );
+    final colorScheme = ColorScheme(
+      brightness: brightness,
+      primary: accent,
+      onPrimary: Colors.white,
+      secondary: SynapseColors.peach,
+      onSecondary: SynapseColors.ink,
+      tertiary: SynapseColors.success,
+      error: SynapseColors.error,
+      onError: Colors.white,
+      surface: bg,
+      onSurface: ink,
+      surfaceContainerHighest: card,
+      outline: (dark ? Colors.white : Colors.black).withValues(alpha: 0.08),
+      outlineVariant:
+          (dark ? Colors.white : Colors.black).withValues(alpha: 0.04),
+    );
 
-  static ThemeData lightTheme({bool glass = false}) =>
-      _buildTheme(glass ? _glassLightColorScheme : _lightColorScheme,
-          isGlass: glass);
-  static ThemeData darkTheme({bool glass = false}) =>
-      _buildTheme(glass ? _glassDarkColorScheme : _darkColorScheme,
-          isGlass: glass);
+    final fraunces = GoogleFonts.fraunces;
+    final dmSans = GoogleFonts.dmSans;
 
-  static ThemeData _buildTheme(ColorScheme colorScheme,
-      {bool isGlass = false}) {
-    final isDark = colorScheme.brightness == Brightness.dark;
-    final base = isDark ? ThemeData.dark() : ThemeData.light();
-    final bodyFont = GoogleFonts.interTextTheme(base.textTheme);
-
-    final scaffoldBg = isGlass
-        ? Colors.transparent
-        : (isDark ? SynapseColors.darkSurface : SynapseColors.lightSurface);
-
-    final cardColor = isGlass
-        ? (isDark
-            ? Colors.white.withValues(alpha: SynapseGlass.fillCardDark)
-            : Colors.white.withValues(alpha: SynapseGlass.fillCardLight))
-        : (isDark ? SynapseColors.darkCard : SynapseColors.lightCard);
-
-    final cardBorderColor = isGlass
-        ? (isDark
-            ? Colors.white.withValues(alpha: SynapseGlass.borderDark)
-            : Colors.white.withValues(alpha: SynapseGlass.borderLightMaterial))
-        : (isDark
-            ? SynapseColors.darkCardBorder
-            : SynapseColors.lightCardBorder);
-
-    final inputFill = isGlass
-        ? (isDark
-            ? Colors.white.withValues(alpha: SynapseGlass.fillCardDark)
-            : Colors.white.withValues(alpha: SynapseGlass.fillInputLightGlass))
-        : (isDark
-            ? Colors.white.withValues(alpha: SynapseGlass.fillFrostedDark)
-            : const Color(0xFFF0EDFF));
-
-    final dialogBg = isGlass
-        ? (isDark ? const Color(0xF0111128) : const Color(0xF0EDEAFF))
-        : (isDark ? SynapseColors.darkElevated : SynapseColors.lightCard);
-
-    final appBarBg = isGlass
-        ? Colors.transparent
-        : (isDark ? SynapseColors.darkSurface : SynapseColors.lightSurface);
-
-    final onSurface = isDark ? const Color(0xFFF0F0F8) : const Color(0xFF0F0E1A);
-
-    return ThemeData(
+    return base.copyWith(
       useMaterial3: true,
-      colorScheme: colorScheme.copyWith(onSurface: onSurface),
-      textTheme: bodyFont.copyWith(
-        headlineLarge: GoogleFonts.outfit(
-          fontSize: 32,
-          fontWeight: FontWeight.w700,
-          color: onSurface,
-          letterSpacing: -0.8,
+      colorScheme: colorScheme,
+      scaffoldBackgroundColor: bg,
+      textTheme: base.textTheme.copyWith(
+        headlineLarge: fraunces(
+          fontSize: 36, fontWeight: FontWeight.w800, color: ink,
+          letterSpacing: -1.0, height: 1.1,
         ),
-        headlineMedium: GoogleFonts.outfit(
-          fontSize: 24,
-          fontWeight: FontWeight.w700,
-          color: onSurface,
-          letterSpacing: -0.5,
+        headlineMedium: fraunces(
+          fontSize: 28, fontWeight: FontWeight.w700, color: ink,
+          letterSpacing: -0.5, height: 1.15,
         ),
-        headlineSmall: GoogleFonts.outfit(
-          fontSize: 20,
-          fontWeight: FontWeight.w600,
-          color: onSurface,
-          letterSpacing: -0.3,
+        headlineSmall: fraunces(
+          fontSize: 22, fontWeight: FontWeight.w700, color: ink,
+          letterSpacing: -0.3, height: 1.2,
         ),
-        titleLarge: GoogleFonts.inter(
-          fontSize: 18,
-          fontWeight: FontWeight.w600,
-          color: onSurface,
-        ),
-        bodyLarge: GoogleFonts.inter(
-          fontSize: 16,
-          color: onSurface,
-          height: 1.55,
-        ),
-        bodyMedium: GoogleFonts.inter(
-          fontSize: 14,
-          color: onSurface.withValues(alpha: 0.72),
-          height: 1.55,
-        ),
-        bodySmall: GoogleFonts.inter(
-          fontSize: 12,
-          color: onSurface.withValues(alpha: 0.48),
-        ),
-        labelSmall: GoogleFonts.firaCode(
-          fontSize: 10,
-          fontWeight: FontWeight.w500,
-          color: onSurface.withValues(alpha: 0.4),
+        titleLarge: dmSans(fontSize: 17, fontWeight: FontWeight.w600, color: ink),
+        titleMedium: dmSans(fontSize: 15, fontWeight: FontWeight.w600, color: ink),
+        bodyLarge: dmSans(fontSize: 15, color: ink, height: 1.5),
+        bodyMedium: dmSans(fontSize: 13, color: inkMuted, height: 1.5),
+        bodySmall: dmSans(fontSize: 11, color: inkMuted, height: 1.4),
+        labelLarge: dmSans(fontSize: 13, fontWeight: FontWeight.w600, color: ink),
+        labelSmall: dmSans(
+          fontSize: 10, fontWeight: FontWeight.w500, color: inkMuted,
           letterSpacing: 0.5,
         ),
       ),
-      scaffoldBackgroundColor: scaffoldBg,
       appBarTheme: AppBarTheme(
-        backgroundColor: appBarBg,
+        backgroundColor: Colors.transparent,
         elevation: 0,
         scrolledUnderElevation: 0,
-        centerTitle: false,
-        titleTextStyle: GoogleFonts.outfit(
-          fontSize: 24,
-          fontWeight: FontWeight.w700,
-          color: onSurface,
-          letterSpacing: -0.5,
-        ),
-        iconTheme: IconThemeData(color: onSurface),
+        centerTitle: true,
+        titleTextStyle: fraunces(fontSize: 18, fontWeight: FontWeight.w600, color: ink),
+        iconTheme: IconThemeData(color: ink, size: 22),
       ),
       cardTheme: CardThemeData(
         elevation: 0,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(SynapseGlass.cardRadius),
-          side: BorderSide(
-              color: cardBorderColor, width: SynapseGlass.borderWidthThin),
-        ),
-        color: cardColor,
+        color: card,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        margin: EdgeInsets.zero,
       ),
       chipTheme: ChipThemeData(
-        backgroundColor: isGlass
-            ? (isDark
-                ? Colors.white.withValues(alpha: SynapseGlass.fillElevatedDark)
-                : Colors.white.withValues(alpha: SynapseGlass.fillChipLightGlass))
-            : colorScheme.primary.withValues(alpha: 0.08),
-        labelStyle: GoogleFonts.inter(
-          fontSize: 12,
-          fontWeight: FontWeight.w600,
-          color: colorScheme.primary,
-        ),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-          side: isGlass
-              ? BorderSide(
-                  color: isDark
-                      ? Colors.white.withValues(alpha: SynapseGlass.borderDark)
-                      : Colors.white
-                          .withValues(alpha: SynapseGlass.borderLightMaterial),
-                  width: SynapseGlass.borderWidthThin,
-                )
-              : BorderSide.none,
-        ),
+        backgroundColor: SynapseColors.peachLight,
+        labelStyle: dmSans(fontSize: 11, fontWeight: FontWeight.w600, color: SynapseColors.ink),
+        shape: const StadiumBorder(),
         side: BorderSide.none,
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       ),
       floatingActionButtonTheme: FloatingActionButtonThemeData(
-        backgroundColor: SynapseColors.neuroPurple,
+        backgroundColor: SynapseColors.ink,
         foregroundColor: Colors.white,
-        elevation: isGlass ? 0 : 3,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
+        elevation: 0,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: inputFill,
+        fillColor: dark ? SynapseColors.darkCard : Colors.white,
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: BorderSide(
-              color: cardBorderColor, width: SynapseGlass.borderWidthThin),
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide.none,
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(16),
           borderSide: BorderSide(
-              color: cardBorderColor, width: SynapseGlass.borderWidthThin),
+            color: (dark ? Colors.white : Colors.black).withValues(alpha: 0.06),
+          ),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: BorderSide(color: colorScheme.primary, width: 1.5),
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide(color: accent, width: 1.5),
         ),
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 15),
+        hintStyle: dmSans(fontSize: 14, color: inkMuted),
       ),
       bottomSheetTheme: BottomSheetThemeData(
-        backgroundColor: dialogBg,
+        backgroundColor: dark ? SynapseColors.darkSurface : Colors.white,
         shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
         ),
       ),
       dialogTheme: DialogThemeData(
-        backgroundColor: dialogBg,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(22),
-        ),
-        elevation: isGlass ? 0 : 4,
+        backgroundColor: dark ? SynapseColors.darkSurface : Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+        elevation: 0,
       ),
       snackBarTheme: SnackBarThemeData(
         behavior: SnackBarBehavior.floating,
-        backgroundColor: isDark
-            ? const Color(0xFF1A1A35)
-            : const Color(0xFF1E1B4B),
-        contentTextStyle: GoogleFonts.inter(
-          fontSize: 14,
-          color: Colors.white,
+        backgroundColor: dark ? SynapseColors.darkInk : SynapseColors.ink,
+        contentTextStyle: dmSans(
+          fontSize: 13,
+          color: dark ? SynapseColors.darkBg : Colors.white,
           fontWeight: FontWeight.w500,
         ),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(14),
-        ),
-        elevation: isGlass ? 0 : 4,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        elevation: 0,
       ),
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
-          ),
-          textStyle: GoogleFonts.inter(
-            fontSize: 14,
-            fontWeight: FontWeight.w600,
-          ),
+          backgroundColor: dark ? SynapseColors.darkInk : SynapseColors.ink,
+          foregroundColor: dark ? SynapseColors.darkBg : Colors.white,
+          padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 16),
+          shape: const StadiumBorder(),
+          elevation: 0,
+          textStyle: dmSans(fontSize: 14, fontWeight: FontWeight.w600),
         ),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
-          ),
-          side: BorderSide(
-            color: isGlass
-                ? (isDark
-                    ? Colors.white
-                        .withValues(alpha: SynapseGlass.borderOutlinedDarkGlass)
-                    : Colors.white
-                        .withValues(alpha: SynapseGlass.borderLightMaterial))
-                : colorScheme.primary.withValues(alpha: 0.25),
-            width: SynapseGlass.borderWidthThin,
-          ),
-          textStyle: GoogleFonts.inter(
-            fontSize: 14,
-            fontWeight: FontWeight.w600,
-          ),
+          padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 16),
+          shape: const StadiumBorder(),
+          side: BorderSide(color: ink.withValues(alpha: 0.15)),
+          foregroundColor: ink,
+          textStyle: dmSans(fontSize: 14, fontWeight: FontWeight.w600),
         ),
       ),
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
-          textStyle: GoogleFonts.inter(
-            fontSize: 14,
-            fontWeight: FontWeight.w600,
-          ),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(10),
-          ),
+          foregroundColor: accent,
+          textStyle: dmSans(fontSize: 14, fontWeight: FontWeight.w600),
+          shape: const StadiumBorder(),
         ),
       ),
       dividerTheme: DividerThemeData(
-        color: isDark
-            ? Colors.white.withValues(alpha: 0.05)
-            : Colors.black.withValues(alpha: 0.05),
+        color: ink.withValues(alpha: 0.06),
         thickness: 0.5,
       ),
       pageTransitionsTheme: const PageTransitionsTheme(

@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:provider/provider.dart';
@@ -86,20 +87,9 @@ class _ThoughtDetailScreenState extends State<ThoughtDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final showDots = _allItems.length > 1;
-    final isGlass = SynapseStyle.of(context);
-    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
-      extendBodyBehindAppBar: isGlass,
-      body: Container(
-        decoration: isGlass
-            ? BoxDecoration(
-                gradient: isDark
-                    ? SynapseColors.gradientAurora
-                    : SynapseColors.gradientAuroraLight,
-              )
-            : null,
-        child: Stack(
+      body: Stack(
         children: [
           PageView.builder(
             controller: _pageController,
@@ -133,8 +123,7 @@ class _ThoughtDetailScreenState extends State<ThoughtDetailScreen> {
                 ),
               ),
             ),
-          ],
-        ),
+        ],
       ),
     );
   }
@@ -154,7 +143,14 @@ class _ThoughtDetailScreenState extends State<ThoughtDetailScreen> {
               children: [
                 _buildCategoryRow(item, theme, colorScheme),
                 const SizedBox(height: 16),
-                Text(item.displayTitle, style: theme.textTheme.headlineMedium),
+                Text(
+                  item.displayTitle,
+                  style: GoogleFonts.fraunces(
+                    textStyle: theme.textTheme.headlineMedium,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.5,
+                  ),
+                ),
                 if (item.siteName != null) ...[
                   const SizedBox(height: 8),
                   _buildSiteRow(item, theme, colorScheme),
@@ -195,6 +191,7 @@ class _ThoughtDetailScreenState extends State<ThoughtDetailScreen> {
                       border: Border.all(
                         color: colorScheme.error.withValues(alpha: 0.3),
                       ),
+                      boxShadow: SynapseShadows.soft,
                     ),
                     child: Row(
                       children: [
@@ -314,6 +311,7 @@ class _ThoughtDetailScreenState extends State<ThoughtDetailScreen> {
           decoration: BoxDecoration(
             color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.85),
             borderRadius: BorderRadius.circular(16),
+            boxShadow: SynapseShadows.soft,
           ),
           child: Text(
             '${_currentIndex + 1} / $dotCount',
@@ -333,6 +331,7 @@ class _ThoughtDetailScreenState extends State<ThoughtDetailScreen> {
         decoration: BoxDecoration(
           color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.85),
           borderRadius: BorderRadius.circular(16),
+          boxShadow: SynapseShadows.soft,
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -447,20 +446,20 @@ class _ThoughtDetailScreenState extends State<ThoughtDetailScreen> {
                           color: colorScheme.onSurface.withValues(alpha: 0.2)),
                     ),
                   ),
-                  Positioned(
-                    bottom: 0,
-                    left: 0,
-                    right: 0,
-                    height: 120,
-                    child: Container(
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                          colors: [
-                            Colors.transparent,
-                            colorScheme.surface,
-                          ],
+                  Positioned.fill(
+                    child: Align(
+                      alignment: Alignment.bottomCenter,
+                      child: FractionallySizedBox(
+                        heightFactor: 0.5,
+                        widthFactor: 1,
+                        alignment: Alignment.bottomCenter,
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            gradient: SynapseGradients.imageOverlay(
+                              dark: Theme.of(context).brightness ==
+                                  Brightness.dark,
+                            ),
+                          ),
                         ),
                       ),
                     ),
@@ -484,6 +483,7 @@ class _ThoughtDetailScreenState extends State<ThoughtDetailScreen> {
             border: Border.all(
               color: colorScheme.outlineVariant.withValues(alpha: 0.3),
             ),
+            boxShadow: SynapseShadows.soft,
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -556,6 +556,7 @@ class _ThoughtDetailScreenState extends State<ThoughtDetailScreen> {
           color: colorScheme.primary.withValues(alpha: 0.06),
           borderRadius: BorderRadius.circular(14),
           border: Border.all(color: colorScheme.primary.withValues(alpha: 0.2)),
+          boxShadow: SynapseShadows.soft,
         ),
         child: Row(
           children: [
@@ -620,6 +621,8 @@ class _ThoughtDetailScreenState extends State<ThoughtDetailScreen> {
   }
 
   Widget _buildCategoryRow(Thought item, ThemeData theme, ColorScheme colorScheme) {
+    final isLight = theme.brightness == Brightness.light;
+    final categoryInk = isLight ? SynapseColors.accent : SynapseColors.darkAccent;
     return GestureDetector(
       onTap: () => _showCategoryPicker(item),
       child: Row(
@@ -628,8 +631,12 @@ class _ThoughtDetailScreenState extends State<ThoughtDetailScreen> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
             decoration: BoxDecoration(
-              color: colorScheme.primary.withValues(alpha: 0.08),
-              borderRadius: BorderRadius.circular(12),
+              color: isLight ? SynapseColors.lavenderLight : SynapseColors.darkCard,
+              borderRadius: BorderRadius.circular(100),
+              border: Border.all(
+                color: categoryInk.withValues(alpha: 0.15),
+              ),
+              boxShadow: SynapseShadows.soft,
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
@@ -639,36 +646,45 @@ class _ThoughtDetailScreenState extends State<ThoughtDetailScreen> {
                 Text(
                   item.category.label,
                   style: theme.textTheme.labelLarge?.copyWith(
-                    color: colorScheme.primary,
+                    color: categoryInk,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
                 const SizedBox(width: 4),
-                Icon(Icons.edit_rounded, size: 14, color: colorScheme.primary.withValues(alpha: 0.5)),
+                Icon(
+                  Icons.edit_rounded,
+                  size: 14,
+                  color: categoryInk.withValues(alpha: 0.5),
+                ),
               ],
             ),
           ),
           if (item.isClassified) ...[
             const SizedBox(width: 8),
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
               decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    SynapseColors.plasmaGreen.withValues(alpha: 0.15),
-                    SynapseColors.synapseCyan.withValues(alpha: 0.1),
-                  ],
+                color: isLight
+                    ? SynapseColors.success.withValues(alpha: 0.10)
+                    : SynapseColors.success.withValues(alpha: 0.14),
+                borderRadius: BorderRadius.circular(100),
+                border: Border.all(
+                  color: SynapseColors.success.withValues(alpha: 0.28),
                 ),
-                borderRadius: BorderRadius.circular(12),
+                boxShadow: SynapseShadows.soft,
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.check_circle_rounded, size: 14, color: Colors.green.shade700),
+                  Icon(Icons.check_circle_rounded, size: 14, color: SynapseColors.success),
                   const SizedBox(width: 4),
                   Text(
                     'Wired',
-                    style: TextStyle(fontSize: 11, color: Colors.green.shade700, fontWeight: FontWeight.w600),
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: SynapseColors.success,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ],
               ),
@@ -735,13 +751,14 @@ class _ThoughtDetailScreenState extends State<ThoughtDetailScreen> {
   }
 
   Widget _buildTagsSection(Thought item, ThemeData theme, ColorScheme colorScheme) {
+    final isDark = theme.brightness == Brightness.dark;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: colorScheme.primary.withValues(alpha: 0.06),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: colorScheme.primary.withValues(alpha: 0.15)),
+      decoration: SynapseDecoration.card(dark: isDark).copyWith(
+        border: const Border(
+          left: BorderSide(color: SynapseColors.accent, width: 3),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -928,13 +945,14 @@ class _ThoughtDetailScreenState extends State<ThoughtDetailScreen> {
     Color? accentColor,
   }) {
     final color = accentColor ?? colorScheme.primary;
+    final isDark = theme.brightness == Brightness.dark;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.06),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: color.withValues(alpha: 0.15)),
+      decoration: SynapseDecoration.card(dark: isDark).copyWith(
+        border: const Border(
+          left: BorderSide(color: SynapseColors.accent, width: 3),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1053,27 +1071,24 @@ class _ThoughtDetailScreenState extends State<ThoughtDetailScreen> {
       codeblockPadding: const EdgeInsets.all(10),
     );
 
+    final isDark = theme.brightness == Brightness.dark;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: colorScheme.primary.withValues(alpha: 0.06),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: colorScheme.primary.withValues(alpha: 0.15)),
+      decoration: SynapseDecoration.card(dark: isDark).copyWith(
+        border: const Border(
+          left: BorderSide(color: SynapseColors.accent, width: 3),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              ShaderMask(
-                shaderCallback: (bounds) =>
-                    SynapseColors.gradientPrimary.createShader(bounds),
-                child: const Icon(
-                  Icons.auto_awesome_rounded,
-                  size: 18,
-                  color: Colors.white,
-                ),
+              Icon(
+                Icons.auto_awesome_rounded,
+                size: 18,
+                color: colorScheme.primary,
               ),
               const SizedBox(width: 8),
               Text(
@@ -1103,16 +1118,12 @@ class _ThoughtDetailScreenState extends State<ThoughtDetailScreen> {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  ShaderMask(
-                    shaderCallback: (bounds) =>
-                        SynapseColors.gradientPrimary.createShader(bounds),
-                    child: Icon(
-                      _markdownExpanded
-                          ? Icons.expand_less_rounded
-                          : Icons.expand_more_rounded,
-                      size: 18,
-                      color: Colors.white,
-                    ),
+                  Icon(
+                    _markdownExpanded
+                        ? Icons.expand_less_rounded
+                        : Icons.expand_more_rounded,
+                    size: 18,
+                    color: colorScheme.primary,
                   ),
                   const SizedBox(width: 4),
                   Text(
@@ -1136,40 +1147,36 @@ class _ThoughtDetailScreenState extends State<ThoughtDetailScreen> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         if (item.url != null && item.url!.isNotEmpty)
-          Container(
-            decoration: BoxDecoration(
-              gradient: SynapseColors.gradientPrimary,
-              borderRadius: BorderRadius.circular(14),
-              boxShadow: [
-                BoxShadow(
-                  color: SynapseColors.neuroPurple.withValues(alpha: 0.3),
-                  blurRadius: 12,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-            ),
+          Opacity(
+            opacity: _isClassifying ? 0.45 : 1,
             child: Material(
-              color: Colors.transparent,
+              type: MaterialType.transparency,
               child: InkWell(
-                borderRadius: BorderRadius.circular(14),
                 onTap: _isClassifying ? null : () => _launchUrl(item.url!),
-                child: const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.open_in_new_rounded,
-                          color: Colors.white, size: 18),
-                      SizedBox(width: 8),
-                      Text(
-                        'Follow Pathway',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w600,
-                          fontSize: 14,
+                borderRadius: BorderRadius.circular(14),
+                child: Ink(
+                  decoration: BoxDecoration(
+                    color: SynapseColors.ink,
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: const SizedBox(
+                    height: 48,
+                    width: double.infinity,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.open_in_new_rounded, size: 18, color: Colors.white),
+                        SizedBox(width: 8),
+                        Text(
+                          'Open Link',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 15,
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -1179,25 +1186,24 @@ class _ThoughtDetailScreenState extends State<ThoughtDetailScreen> {
         OutlinedButton.icon(
           onPressed: _isClassifying ? null : () => _classify(item),
           icon: _isClassifying
-              ? SizedBox(
+              ? const SizedBox(
                   width: 20,
                   height: 20,
                   child: CircularProgressIndicator(
                     strokeWidth: 2,
-                    color: colorScheme.primary,
+                    color: SynapseColors.accent,
                   ),
                 )
-              : Icon(Icons.auto_awesome_rounded, size: 20, color: colorScheme.primary),
+              : const Icon(Icons.auto_awesome_rounded, size: 20, color: SynapseColors.accent),
           label: Text(
             _isClassifying ? 'Wiring...' : 'Wire this synapse',
-            style: TextStyle(color: colorScheme.primary),
+            style: const TextStyle(color: SynapseColors.accent),
           ),
           style: OutlinedButton.styleFrom(
             padding: const EdgeInsets.symmetric(vertical: 14),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-            side: BorderSide(
-              color: SynapseColors.neuroPurple.withValues(alpha: 0.3),
-            ),
+            side: const BorderSide(color: SynapseColors.accent, width: 1.5),
+            foregroundColor: SynapseColors.accent,
           ),
         ),
       ],

@@ -15,7 +15,7 @@ void main() {
   WidgetsFlutterBinding.ensureInitialized();
   SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
     statusBarColor: Colors.transparent,
-    statusBarIconBrightness: Brightness.light,
+    statusBarIconBrightness: Brightness.dark,
     systemNavigationBarColor: Colors.transparent,
   ));
   SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
@@ -101,19 +101,15 @@ class _SynapseAppState extends State<SynapseApp> {
       value: _provider,
       child: Consumer<SynapseProvider>(
         builder: (context, provider, _) {
-          final isGlass = provider.isGlass;
-          return SynapseStyle(
-            isGlass: isGlass,
-            child: MaterialApp(
-              title: 'Synapse',
-              debugShowCheckedModeBanner: false,
-              theme: AppTheme.lightTheme(glass: isGlass),
-              darkTheme: AppTheme.darkTheme(glass: isGlass),
-              themeMode: _mapThemeMode(provider.themeMode),
-              home: _SynapseHome(
-                shareHandler: _shareHandler,
-                provider: _provider,
-              ),
+          return MaterialApp(
+            title: 'Synapse',
+            debugShowCheckedModeBanner: false,
+            theme: AppTheme.lightTheme(),
+            darkTheme: AppTheme.darkTheme(),
+            themeMode: _mapThemeMode(provider.themeMode),
+            home: _SynapseHome(
+              shareHandler: _shareHandler,
+              provider: _provider,
             ),
           );
         },

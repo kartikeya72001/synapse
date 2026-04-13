@@ -18,6 +18,7 @@ class _SecretsScreenState extends State<SecretsScreen> {
   List<SecretItem> _secrets = [];
   bool _isAuthenticated = false;
   bool _isLoading = true;
+  bool _authFailed = false;
   final Map<String, String> _revealedValues = {};
 
   @override
@@ -32,7 +33,7 @@ class _SecretsScreenState extends State<SecretsScreen> {
       setState(() => _isAuthenticated = true);
       await _loadSecrets();
     } else if (mounted) {
-      Navigator.pop(context);
+      setState(() => _authFailed = true);
     }
   }
 
@@ -45,92 +46,117 @@ class _SecretsScreenState extends State<SecretsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
-    final isGlass = SynapseStyle.of(context);
-    final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    if (!_isAuthenticated) {
-      return Scaffold(
-        appBar: AppBar(),
-        body: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                Icons.fingerprint_rounded,
-                size: 64,
-                color: colorScheme.primary,
-              ),
-              const SizedBox(height: 16),
-              Text('Verifying identity...', style: theme.textTheme.titleLarge),
-            ],
-          ),
-        ),
-      );
-    }
-
-    return Scaffold(
-      extendBodyBehindAppBar: isGlass,
-      appBar: AppBar(
-        title: Row(
+    return Container(
+      decoration: BoxDecoration(
+        gradient: isDark ? SynapseGradients.vaultBgDark : SynapseGradients.vaultBg,
+      ),
+      child: SafeArea(
+        bottom: false,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Container(
-              padding: const EdgeInsets.all(6),
-              decoration: BoxDecoration(
-                color: colorScheme.error.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Icon(
-                Icons.shield_rounded,
-                size: 20,
-                color: colorScheme.error,
-              ),
-            ),
-            const SizedBox(width: 10),
-            ShaderMask(
-              shaderCallback: (bounds) =>
-                  SynapseColors.gradientPrimary.createShader(bounds),
-              child: Text(
-                'Vault',
-                style: theme.appBarTheme.titleTextStyle
-                    ?.copyWith(color: Colors.white),
-              ),
-            ),
+            _buildHeader(isDark, theme, colorScheme),
+            Expanded(child: _buildBody(isDark, theme, colorScheme)),
           ],
         ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.lock_rounded),
-            tooltip: 'Seal the vault',
-            onPressed: () => Navigator.pop(context),
-          ),
-        ],
-      ),
-      body: Container(
-        decoration: isGlass
-            ? BoxDecoration(
-                gradient: isDark
-                    ? SynapseColors.gradientAurora
-                    : SynapseColors.gradientAuroraLight,
-              )
-            : null,
-        child: _isLoading
-            ? const Center(child: CircularProgressIndicator())
-            : _secrets.isEmpty
-            ? _buildEmptyState(theme, colorScheme)
-            : _buildSecretsList(theme, colorScheme),
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => _showAddDialog(theme, colorScheme),
-        backgroundColor: colorScheme.error,
-        foregroundColor: colorScheme.onError,
-        child: const Icon(Icons.add_rounded),
       ),
     );
   }
 
-  Widget _buildEmptyState(ThemeData theme, ColorScheme colorScheme) {
+  Widget _buildHeader(bool isDark, ThemeData theme, ColorScheme colorScheme) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 14, 16, 10),
+      child: Row(
+        children: [
+          Text(
+            'Vault',
+            style: GoogleFonts.fraunces(
+              fontSize: 28,
+              fontWeight: FontWeight.w800,
+              color: isDark ? SynapseColors.darkInk : SynapseColors.ink,
+              letterSpacing: -0.5,
+            ),
+          ),
+          const Spacer(),
+          if (_isAuthenticated)
+            GestureDetector(
+              onTap: () => _showAddDialog(theme, colorScheme),
+              child: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: SynapseColors.ink,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(Icons.add_rounded,
+                    size: 18, color: Colors.white),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBody(bool isDark, ThemeData theme, ColorScheme colorScheme) {
+    if (!_isAuthenticated) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              width: 80,
+              height: 80,
+              decoration: BoxDecoration(
+                color: SynapseColors.coralLight,
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.fingerprint_rounded,
+                size: 40,
+                color: SynapseColors.error.withValues(alpha: 0.5),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              _authFailed ? 'Authentication required' : 'Verifying identity...',
+              style: GoogleFonts.fraunces(
+                fontSize: 20,
+                fontWeight: FontWeight.w700,
+                color: isDark ? SynapseColors.darkInk : SynapseColors.ink,
+              ),
+            ),
+            if (_authFailed) ...[
+              const SizedBox(height: 16),
+              FilledButton(
+                onPressed: () {
+                  setState(() => _authFailed = false);
+                  _authenticate();
+                },
+                child: const Text('Try again'),
+              ),
+            ],
+          ],
+        ),
+      );
+    }
+
+    if (_isLoading) {
+      return Center(
+        child: CircularProgressIndicator(
+          color: SynapseColors.accent,
+          strokeWidth: 2,
+        ),
+      );
+    }
+
+    if (_secrets.isEmpty) return _buildEmptyState(isDark, theme, colorScheme);
+    return _buildSecretsList(isDark, theme, colorScheme);
+  }
+
+  Widget _buildEmptyState(bool isDark, ThemeData theme, ColorScheme colorScheme) {
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(48),
@@ -138,36 +164,45 @@ class _SecretsScreenState extends State<SecretsScreen> {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Container(
-              padding: const EdgeInsets.all(24),
+              width: 80,
+              height: 80,
               decoration: BoxDecoration(
-                color: colorScheme.error.withValues(alpha: 0.08),
+                color: SynapseColors.coralLight,
                 shape: BoxShape.circle,
               ),
-              child: ShaderMask(
-                shaderCallback: (bounds) =>
-                    SynapseColors.gradientPrimary.createShader(bounds),
-                child: Icon(
-                  Icons.enhanced_encryption_rounded,
-                  size: 64,
-                  color: Colors.white,
-                ),
+              child: Icon(
+                Icons.enhanced_encryption_rounded,
+                size: 36,
+                color: SynapseColors.error.withValues(alpha: 0.4),
               ),
             ),
             const SizedBox(height: 24),
-            Text('Vault is sealed', style: theme.textTheme.headlineSmall),
+            Text(
+              'Vault is sealed',
+              style: GoogleFonts.fraunces(
+                fontSize: 24,
+                fontWeight: FontWeight.w800,
+                color: isDark ? SynapseColors.darkInk : SynapseColors.ink,
+              ),
+            ),
             const SizedBox(height: 8),
             Text(
               'Store passwords, API keys, bank details,\nand other secrets deep in the vault.',
-              style: theme.textTheme.bodyMedium,
+              style: GoogleFonts.dmSans(
+                fontSize: 14,
+                color: SynapseColors.inkMuted,
+                height: 1.5,
+              ),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 8),
             Text(
-              'AES-256 encrypted. Biometric lock only.',
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: colorScheme.error.withValues(alpha: 0.7),
+              'AES-256 encrypted · Biometric lock only',
+              style: GoogleFonts.dmSans(
+                fontSize: 11,
+                color: SynapseColors.error.withValues(alpha: 0.6),
+                fontWeight: FontWeight.w600,
               ),
-              textAlign: TextAlign.center,
             ),
           ],
         ),
@@ -175,13 +210,9 @@ class _SecretsScreenState extends State<SecretsScreen> {
     );
   }
 
-  Widget _buildSecretsList(ThemeData theme, ColorScheme colorScheme) {
-    final isGlass = SynapseStyle.of(context);
-    final topPadding = isGlass
-        ? kToolbarHeight + MediaQuery.of(context).padding.top + 12
-        : 12.0;
+  Widget _buildSecretsList(bool isDark, ThemeData theme, ColorScheme colorScheme) {
     return ListView.builder(
-      padding: EdgeInsets.fromLTRB(16, topPadding, 16, 100),
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 100),
       itemCount: _secrets.length,
       itemBuilder: (context, index) {
         final secret = _secrets[index];
@@ -189,7 +220,7 @@ class _SecretsScreenState extends State<SecretsScreen> {
 
         return Padding(
           padding: const EdgeInsets.only(bottom: 12),
-          child: _buildSecretCard(secret, isRevealed, theme, colorScheme),
+          child: _buildSecretCard(secret, isRevealed, isDark, theme, colorScheme),
         );
       },
     );
@@ -198,14 +229,14 @@ class _SecretsScreenState extends State<SecretsScreen> {
   Widget _buildSecretCard(
     SecretItem secret,
     bool isRevealed,
+    bool isDark,
     ThemeData theme,
     ColorScheme colorScheme,
   ) {
     return Container(
       decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: colorScheme.error.withValues(alpha: 0.12)),
+        color: isDark ? SynapseColors.darkCard : SynapseColors.coralLight,
+        borderRadius: BorderRadius.circular(20),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -214,12 +245,23 @@ class _SecretsScreenState extends State<SecretsScreen> {
             padding: const EdgeInsets.fromLTRB(16, 14, 8, 0),
             child: Row(
               children: [
-                Icon(Icons.key_rounded, size: 18, color: colorScheme.error),
+                Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: SynapseColors.error.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(Icons.key_rounded, size: 14, color: colorScheme.error),
+                ),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
                     secret.title,
-                    style: theme.textTheme.titleLarge?.copyWith(fontSize: 15),
+                    style: GoogleFonts.dmSans(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      color: isDark ? SynapseColors.darkInk : SynapseColors.ink,
+                    ),
                   ),
                 ),
                 PopupMenuButton<String>(
@@ -231,7 +273,7 @@ class _SecretsScreenState extends State<SecretsScreen> {
                   icon: Icon(
                     Icons.more_vert_rounded,
                     size: 20,
-                    color: colorScheme.onSurface.withValues(alpha: 0.5),
+                    color: SynapseColors.inkMuted,
                   ),
                 ),
               ],
@@ -242,7 +284,7 @@ class _SecretsScreenState extends State<SecretsScreen> {
               padding: const EdgeInsets.fromLTRB(16, 2, 16, 0),
               child: Text(
                 secret.description!,
-                style: theme.textTheme.bodySmall,
+                style: GoogleFonts.dmSans(fontSize: 12, color: SynapseColors.inkMuted),
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
               ),
@@ -253,11 +295,10 @@ class _SecretsScreenState extends State<SecretsScreen> {
               width: double.infinity,
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: colorScheme.surface,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(
-                  color: colorScheme.outlineVariant.withValues(alpha: 0.2),
-                ),
+                color: isDark
+                    ? SynapseColors.darkElevated
+                    : Colors.white.withValues(alpha: 0.7),
+                borderRadius: BorderRadius.circular(12),
               ),
               child: Row(
                 children: [
@@ -269,8 +310,8 @@ class _SecretsScreenState extends State<SecretsScreen> {
                       style: GoogleFonts.jetBrainsMono(
                         fontSize: 14,
                         color: isRevealed
-                            ? colorScheme.onSurface
-                            : colorScheme.onSurface.withValues(alpha: 0.3),
+                            ? (isDark ? SynapseColors.darkInk : SynapseColors.ink)
+                            : SynapseColors.inkFaint,
                       ),
                       maxLines: isRevealed ? 5 : 1,
                       overflow: TextOverflow.ellipsis,
@@ -284,7 +325,7 @@ class _SecretsScreenState extends State<SecretsScreen> {
                           ? Icons.visibility_off_rounded
                           : Icons.visibility_rounded,
                       size: 20,
-                      color: colorScheme.error,
+                      color: SynapseColors.error,
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -293,7 +334,7 @@ class _SecretsScreenState extends State<SecretsScreen> {
                     child: Icon(
                       Icons.copy_rounded,
                       size: 20,
-                      color: colorScheme.primary,
+                      color: SynapseColors.accent,
                     ),
                   ),
                 ],
@@ -304,28 +345,21 @@ class _SecretsScreenState extends State<SecretsScreen> {
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 14),
             child: Row(
               children: [
-                Icon(
-                  Icons.access_time_rounded,
-                  size: 12,
-                  color: colorScheme.onSurface.withValues(alpha: 0.4),
-                ),
+                Icon(Icons.access_time_rounded, size: 12, color: SynapseColors.inkFaint),
                 const SizedBox(width: 4),
                 Text(
                   timeago.format(secret.createdAt),
-                  style: theme.textTheme.bodySmall?.copyWith(fontSize: 11),
+                  style: GoogleFonts.dmSans(fontSize: 11, color: SynapseColors.inkMuted),
                 ),
                 const Spacer(),
-                Icon(
-                  Icons.lock_rounded,
-                  size: 12,
-                  color: colorScheme.error.withValues(alpha: 0.5),
-                ),
+                Icon(Icons.lock_rounded, size: 12,
+                    color: SynapseColors.error.withValues(alpha: 0.4)),
                 const SizedBox(width: 4),
                 Text(
                   'AES-256',
-                  style: theme.textTheme.bodySmall?.copyWith(
+                  style: GoogleFonts.dmSans(
                     fontSize: 10,
-                    color: colorScheme.error.withValues(alpha: 0.5),
+                    color: SynapseColors.error.withValues(alpha: 0.5),
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -341,9 +375,7 @@ class _SecretsScreenState extends State<SecretsScreen> {
     if (_revealedValues.containsKey(secret.id)) {
       setState(() => _revealedValues.remove(secret.id));
     } else {
-      final decrypted = await _secretService.decryptValue(
-        secret.encryptedValue,
-      );
+      final decrypted = await _secretService.decryptValue(secret.encryptedValue);
       setState(() => _revealedValues[secret.id] = decrypted);
     }
   }
@@ -388,7 +420,7 @@ class _SecretsScreenState extends State<SecretsScreen> {
               _loadSecrets();
             },
             style: FilledButton.styleFrom(
-              backgroundColor: Theme.of(context).colorScheme.error,
+              backgroundColor: SynapseColors.error,
             ),
             child: const Text('Delete'),
           ),
@@ -411,10 +443,7 @@ class _SecretsScreenState extends State<SecretsScreen> {
           builder: (ctx, setSheetState) {
             return Padding(
               padding: EdgeInsets.fromLTRB(
-                20,
-                24,
-                20,
-                MediaQuery.of(ctx).viewInsets.bottom + 24,
+                20, 24, 20, MediaQuery.of(ctx).viewInsets.bottom + 24,
               ),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -422,15 +451,9 @@ class _SecretsScreenState extends State<SecretsScreen> {
                 children: [
                   Row(
                     children: [
-                      Icon(
-                        Icons.enhanced_encryption_rounded,
-                        color: colorScheme.error,
-                      ),
+                      Icon(Icons.enhanced_encryption_rounded, color: colorScheme.error),
                       const SizedBox(width: 10),
-                      Text(
-                        'Bury a Secret',
-                        style: theme.textTheme.headlineSmall,
-                      ),
+                      Text('Bury a Secret', style: theme.textTheme.headlineSmall),
                     ],
                   ),
                   const SizedBox(height: 20),
@@ -463,69 +486,40 @@ class _SecretsScreenState extends State<SecretsScreen> {
                       prefixIcon: const Icon(Icons.key_rounded),
                       suffixIcon: IconButton(
                         icon: Icon(
-                          obscure
-                              ? Icons.visibility_rounded
-                              : Icons.visibility_off_rounded,
+                          obscure ? Icons.visibility_rounded : Icons.visibility_off_rounded,
                         ),
-                        onPressed: () =>
-                            setSheetState(() => obscure = !obscure),
+                        onPressed: () => setSheetState(() => obscure = !obscure),
                       ),
                     ),
                   ),
                   const SizedBox(height: 20),
-                  Container(
-                    width: double.infinity,
-                    decoration: BoxDecoration(
-                      gradient: SynapseColors.gradientPrimary,
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: Material(
-                      color: Colors.transparent,
-                      child: InkWell(
-                        borderRadius: BorderRadius.circular(14),
-                        onTap: () async {
-                          if (titleController.text.trim().isEmpty ||
-                              valueController.text.trim().isEmpty) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text(
-                                  'A secret needs both a name and a value.',
-                                ),
-                              ),
-                            );
-                            return;
-                          }
-                          await _secretService.addSecret(
-                            title: titleController.text.trim(),
-                            description: descController.text.trim().isEmpty
-                                ? null
-                                : descController.text.trim(),
-                            value: valueController.text,
-                          );
-                          if (ctx.mounted) Navigator.pop(ctx);
-                          _loadSecrets();
-                        },
-                        child: const Padding(
-                          padding: EdgeInsets.symmetric(vertical: 14),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(
-                                Icons.lock_rounded,
-                                color: Colors.white,
-                                size: 20,
-                              ),
-                              SizedBox(width: 8),
-                              Text(
-                                'Seal in Vault',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ],
+                  FilledButton.icon(
+                    onPressed: () async {
+                      if (titleController.text.trim().isEmpty ||
+                          valueController.text.trim().isEmpty) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('A secret needs both a name and a value.'),
                           ),
-                        ),
+                        );
+                        return;
+                      }
+                      await _secretService.addSecret(
+                        title: titleController.text.trim(),
+                        description: descController.text.trim().isEmpty
+                            ? null
+                            : descController.text.trim(),
+                        value: valueController.text,
+                      );
+                      if (ctx.mounted) Navigator.pop(ctx);
+                      _loadSecrets();
+                    },
+                    icon: const Icon(Icons.lock_rounded, size: 20),
+                    label: const Text('Seal in Vault'),
+                    style: FilledButton.styleFrom(
+                      minimumSize: const Size(double.infinity, 48),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
                       ),
                     ),
                   ),
@@ -540,9 +534,7 @@ class _SecretsScreenState extends State<SecretsScreen> {
 
   void _showEditDialog(SecretItem secret) async {
     final titleController = TextEditingController(text: secret.title);
-    final descController = TextEditingController(
-      text: secret.description ?? '',
-    );
+    final descController = TextEditingController(text: secret.description ?? '');
     final valueController = TextEditingController();
     bool obscure = true;
 
@@ -562,10 +554,7 @@ class _SecretsScreenState extends State<SecretsScreen> {
           builder: (ctx, setSheetState) {
             return Padding(
               padding: EdgeInsets.fromLTRB(
-                20,
-                24,
-                20,
-                MediaQuery.of(ctx).viewInsets.bottom + 24,
+                20, 24, 20, MediaQuery.of(ctx).viewInsets.bottom + 24,
               ),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -575,10 +564,7 @@ class _SecretsScreenState extends State<SecretsScreen> {
                     children: [
                       Icon(Icons.edit_rounded, color: colorScheme.error),
                       const SizedBox(width: 10),
-                      Text(
-                        'Modify Secret',
-                        style: theme.textTheme.headlineSmall,
-                      ),
+                      Text('Modify Secret', style: theme.textTheme.headlineSmall),
                     ],
                   ),
                   const SizedBox(height: 20),
@@ -606,12 +592,9 @@ class _SecretsScreenState extends State<SecretsScreen> {
                       prefixIcon: const Icon(Icons.key_rounded),
                       suffixIcon: IconButton(
                         icon: Icon(
-                          obscure
-                              ? Icons.visibility_rounded
-                              : Icons.visibility_off_rounded,
+                          obscure ? Icons.visibility_rounded : Icons.visibility_off_rounded,
                         ),
-                        onPressed: () =>
-                            setSheetState(() => obscure = !obscure),
+                        onPressed: () => setSheetState(() => obscure = !obscure),
                       ),
                     ),
                   ),
@@ -619,27 +602,22 @@ class _SecretsScreenState extends State<SecretsScreen> {
                   FilledButton.icon(
                     onPressed: () async {
                       if (titleController.text.trim().isEmpty ||
-                          valueController.text.trim().isEmpty) {
-                        return;
-                      }
+                          valueController.text.trim().isEmpty) return;
                       final updated = secret.copyWith(
                         title: titleController.text.trim(),
                         description: descController.text.trim().isEmpty
                             ? null
                             : descController.text.trim(),
                       );
-                      await _secretService.updateSecret(
-                        updated,
-                        newValue: valueController.text,
-                      );
+                      await _secretService.updateSecret(updated, newValue: valueController.text);
                       if (ctx.mounted) Navigator.pop(ctx);
                       _loadSecrets();
                     },
                     icon: const Icon(Icons.save_rounded),
                     label: const Text('Re-seal'),
                     style: FilledButton.styleFrom(
-                      backgroundColor: colorScheme.error,
-                      foregroundColor: colorScheme.onError,
+                      backgroundColor: SynapseColors.error,
+                      foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(vertical: 16),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(14),

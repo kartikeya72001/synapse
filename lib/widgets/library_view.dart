@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import '../models/thought.dart';
 import '../providers/synapse_provider.dart';
@@ -10,14 +11,7 @@ import '../screens/group_detail_screen.dart';
 import '../screens/settings_screen.dart';
 
 class LibraryView extends StatefulWidget {
-  final double topPad;
-  final double bottomPad;
-
-  const LibraryView({
-    super.key,
-    this.topPad = 0,
-    this.bottomPad = 0,
-  });
+  const LibraryView({super.key});
 
   @override
   State<LibraryView> createState() => _LibraryViewState();
@@ -44,8 +38,7 @@ class _LibraryViewState extends State<LibraryView> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Consumer<SynapseProvider>(
       builder: (context, provider, _) {
@@ -64,123 +57,76 @@ class _LibraryViewState extends State<LibraryView> {
               }
             }
           },
-          child: Column(
-            children: [
-              SizedBox(height: widget.topPad),
-              _buildToolbar(theme, colorScheme, provider),
-              Expanded(
-                child: _buildContent(theme, colorScheme, provider),
+          child: Container(
+            decoration: BoxDecoration(
+              gradient: isDark ? SynapseGradients.libraryBgDark : SynapseGradients.libraryBg,
+            ),
+            child: SafeArea(
+              bottom: false,
+              child: Column(
+                children: [
+                  _buildToolbar(isDark, provider),
+                  Expanded(child: _buildContent(isDark, provider)),
+                ],
               ),
-              SizedBox(height: widget.bottomPad),
-            ],
+            ),
           ),
         );
       },
     );
   }
 
-  Widget _buildToolbar(
-    ThemeData theme,
-    ColorScheme colorScheme,
-    SynapseProvider provider,
-  ) {
-    if (_isSelecting) {
-      return _buildSelectionBar(theme, colorScheme, provider);
-    }
-    if (_isSearching) {
-      return _buildSearchBar(theme, colorScheme, provider);
-    }
-    return _buildDefaultBar(theme, colorScheme, provider);
+  Widget _buildToolbar(bool isDark, SynapseProvider provider) {
+    if (_isSelecting) return _buildSelectionBar(isDark, provider);
+    if (_isSearching) return _buildSearchBar(isDark, provider);
+    return _buildDefaultBar(isDark, provider);
   }
 
-  Widget _buildDefaultBar(
-    ThemeData theme,
-    ColorScheme colorScheme,
-    SynapseProvider provider,
-  ) {
+  Widget _buildDefaultBar(bool isDark, SynapseProvider provider) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 8, 12, 4),
+      padding: const EdgeInsets.fromLTRB(24, 14, 16, 10),
       child: Row(
         children: [
-          Icon(
-            Icons.layers_rounded,
-            size: 20,
-            color: SynapseColors.neuroPurple.withValues(alpha: 0.6),
-          ),
-          const SizedBox(width: 8),
           Text(
-            'Library',
-            style: theme.textTheme.headlineSmall?.copyWith(fontSize: 20),
+            'Memories',
+            style: GoogleFonts.fraunces(
+              fontSize: 28,
+              fontWeight: FontWeight.w800,
+              color: isDark ? SynapseColors.darkInk : SynapseColors.ink,
+              letterSpacing: -0.5,
+            ),
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 10),
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
             decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  SynapseColors.neuroPurple.withValues(alpha: 0.12),
-                  SynapseColors.synapseBlue.withValues(alpha: 0.08),
-                ],
-              ),
+              color: isDark
+                  ? SynapseColors.darkAccent.withValues(alpha: 0.12)
+                  : SynapseColors.lavenderLight,
               borderRadius: BorderRadius.circular(8),
             ),
             child: Text(
               '${provider.items.length}',
-              style: TextStyle(
+              style: GoogleFonts.dmSans(
                 fontSize: 11,
                 fontWeight: FontWeight.w700,
-                color: SynapseColors.neuroPurple.withValues(alpha: 0.7),
+                color: isDark
+                    ? SynapseColors.darkAccent
+                    : SynapseColors.accent,
               ),
             ),
           ),
           const Spacer(),
-          IconButton(
-            icon: const Icon(Icons.search_rounded, size: 22),
-            onPressed: () => setState(() => _isSearching = true),
-            visualDensity: VisualDensity.compact,
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSearchBar(
-    ThemeData theme,
-    ColorScheme colorScheme,
-    SynapseProvider provider,
-  ) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
-      child: Row(
-        children: [
-          IconButton(
-            icon: const Icon(Icons.arrow_back_rounded, size: 22),
-            onPressed: () {
-              setState(() {
-                _isSearching = false;
-                _searchController.clear();
-                provider.search('');
-              });
-            },
-            visualDensity: VisualDensity.compact,
-          ),
-          const SizedBox(width: 4),
-          Expanded(
-            child: TextField(
-              controller: _searchController,
-              autofocus: true,
-              decoration: InputDecoration(
-                hintText: 'Search memories...',
-                border: InputBorder.none,
-                enabledBorder: InputBorder.none,
-                focusedBorder: InputBorder.none,
-                filled: false,
-                hintStyle: theme.textTheme.bodyLarge?.copyWith(
-                  color: colorScheme.onSurface.withValues(alpha: 0.3),
-                ),
+          GestureDetector(
+            onTap: () => setState(() => _isSearching = true),
+            child: Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: SynapseColors.ink.withValues(alpha: 0.04),
+                borderRadius: BorderRadius.circular(10),
               ),
-              style: theme.textTheme.bodyLarge,
-              onChanged: (q) => provider.search(q),
+              child: Icon(Icons.search_rounded,
+                  size: 20, color: SynapseColors.inkMuted),
             ),
           ),
         ],
@@ -188,24 +134,71 @@ class _LibraryViewState extends State<LibraryView> {
     );
   }
 
-  Widget _buildSelectionBar(
-    ThemeData theme,
-    ColorScheme colorScheme,
-    SynapseProvider provider,
-  ) {
+  Widget _buildSearchBar(bool isDark, SynapseProvider provider) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+      child: Container(
+        decoration: BoxDecoration(
+          color: isDark ? SynapseColors.darkCard : Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: SynapseShadows.soft,
+        ),
+        child: Row(
+          children: [
+            GestureDetector(
+              onTap: () {
+                setState(() {
+                  _isSearching = false;
+                  _searchController.clear();
+                  provider.search('');
+                });
+              },
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Icon(Icons.arrow_back_rounded,
+                    size: 20, color: SynapseColors.inkMuted),
+              ),
+            ),
+            Expanded(
+              child: TextField(
+                controller: _searchController,
+                autofocus: true,
+                decoration: InputDecoration(
+                  hintText: 'Search memories...',
+                  border: InputBorder.none,
+                  enabledBorder: InputBorder.none,
+                  focusedBorder: InputBorder.none,
+                  filled: false,
+                  contentPadding: const EdgeInsets.symmetric(vertical: 14),
+                ),
+                onChanged: (q) => provider.search(q),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSelectionBar(bool isDark, SynapseProvider provider) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
       child: Row(
         children: [
-          IconButton(
-            icon: const Icon(Icons.close_rounded, size: 22),
-            onPressed: _exitSelectionMode,
-            visualDensity: VisualDensity.compact,
+          GestureDetector(
+            onTap: _exitSelectionMode,
+            child: Padding(
+              padding: const EdgeInsets.all(8),
+              child: Icon(Icons.close_rounded, size: 22),
+            ),
           ),
-          const SizedBox(width: 4),
+          const SizedBox(width: 8),
           Text(
             '${_selectedIds.length} selected',
-            style: theme.textTheme.titleLarge?.copyWith(fontSize: 17),
+            style: GoogleFonts.dmSans(
+              fontSize: 17,
+              fontWeight: FontWeight.w600,
+            ),
           ),
           const Spacer(),
           TextButton(
@@ -222,30 +215,31 @@ class _LibraryViewState extends State<LibraryView> {
               _selectedIds.length == provider.items.length ? 'None' : 'All',
             ),
           ),
-          IconButton(
-            icon: Icon(Icons.delete_outline_rounded,
-                color: colorScheme.error, size: 22),
-            onPressed: _selectedIds.isEmpty
+          GestureDetector(
+            onTap: _selectedIds.isEmpty
                 ? null
                 : () => _deleteSelected(provider),
-            visualDensity: VisualDensity.compact,
+            child: Padding(
+              padding: const EdgeInsets.all(8),
+              child: Icon(Icons.delete_outline_rounded,
+                  color: SynapseColors.error, size: 22),
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildContent(
-    ThemeData theme,
-    ColorScheme colorScheme,
-    SynapseProvider provider,
-  ) {
+  Widget _buildContent(bool isDark, SynapseProvider provider) {
     if (provider.isLoading) {
-      return const Center(child: CircularProgressIndicator());
+      return Center(
+        child: CircularProgressIndicator(
+          color: SynapseColors.accent,
+          strokeWidth: 2,
+        ),
+      );
     }
-    if (provider.totalItemCount == 0) {
-      return _buildEmptyState(theme);
-    }
+    if (provider.totalItemCount == 0) return _buildEmptyState(isDark);
 
     return CustomScrollView(
       physics: const BouncingScrollPhysics(
@@ -253,13 +247,13 @@ class _LibraryViewState extends State<LibraryView> {
       ),
       slivers: [
         if (!_isSearching && !_isSelecting && provider.totalItemCount > 0)
-          _buildActionStrip(theme, colorScheme, provider),
+          _buildActionStrip(isDark, provider),
         if (!_isSearching && !_isSelecting)
-          _buildFilterRow(theme, colorScheme, provider),
+          _buildFilterRow(isDark, provider),
         if (provider.items.isEmpty && provider.isFilterActive)
           SliverFillRemaining(
             hasScrollBody: false,
-            child: _buildNoMatchesState(theme, provider),
+            child: _buildNoMatchesState(isDark, provider),
           )
         else
           _buildList(provider),
@@ -267,32 +261,41 @@ class _LibraryViewState extends State<LibraryView> {
     );
   }
 
-  Widget _buildNoMatchesState(ThemeData theme, SynapseProvider provider) {
+  Widget _buildNoMatchesState(bool isDark, SynapseProvider provider) {
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(48),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
-              Icons.filter_alt_off_rounded,
-              size: 44,
-              color: SynapseColors.neuroPurple.withValues(alpha: 0.18),
+            Container(
+              width: 64,
+              height: 64,
+              decoration: BoxDecoration(
+                color: SynapseColors.peachLight,
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Icon(Icons.filter_alt_off_rounded,
+                  size: 28, color: SynapseColors.inkFaint),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 20),
             Text(
               'No matches',
-              style: theme.textTheme.headlineSmall?.copyWith(
-                color: theme.colorScheme.onSurface.withValues(alpha: 0.25),
+              style: GoogleFonts.fraunces(
+                fontSize: 20,
+                fontWeight: FontWeight.w700,
+                color: isDark
+                    ? SynapseColors.darkInk
+                    : SynapseColors.ink,
               ),
             ),
             const SizedBox(height: 6),
             Text(
               'No memories match this filter.',
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: theme.colorScheme.onSurface.withValues(alpha: 0.20),
+              style: GoogleFonts.dmSans(
+                fontSize: 13,
+                color: SynapseColors.inkMuted,
               ),
-              textAlign: TextAlign.center,
             ),
             const SizedBox(height: 20),
             TextButton.icon(
@@ -309,30 +312,57 @@ class _LibraryViewState extends State<LibraryView> {
     );
   }
 
-  Widget _buildEmptyState(ThemeData theme) {
+  Widget _buildEmptyState(bool isDark) {
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(48),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
-              Icons.psychology_rounded,
-              size: 52,
-              color: SynapseColors.neuroPurple.withValues(alpha: 0.18),
-            ),
-            const SizedBox(height: 18),
-            Text(
-              'Nothing here yet',
-              style: theme.textTheme.headlineSmall?.copyWith(
-                color: theme.colorScheme.onSurface.withValues(alpha: 0.25),
+            Container(
+              width: 80,
+              height: 80,
+              decoration: BoxDecoration(
+                gradient: RadialGradient(
+                  colors: [
+                    SynapseColors.lavenderWash.withValues(alpha: 0.5),
+                    SynapseColors.lavenderWash.withValues(alpha: 0.0),
+                  ],
+                ),
+                shape: BoxShape.circle,
+              ),
+              child: Center(
+                child: Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color: SynapseColors.lavenderLight,
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Icon(Icons.layers_outlined,
+                      size: 24, color: SynapseColors.accent),
+                ),
               ),
             ),
-            const SizedBox(height: 6),
+            const SizedBox(height: 24),
+            Text(
+              'Nothing here yet',
+              style: GoogleFonts.fraunces(
+                fontSize: 22,
+                fontWeight: FontWeight.w800,
+                color: isDark
+                    ? SynapseColors.darkInk
+                    : SynapseColors.ink,
+                letterSpacing: -0.3,
+              ),
+            ),
+            const SizedBox(height: 8),
             Text(
               'Share a link or screenshot from any app\nto start building your second brain.',
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: theme.colorScheme.onSurface.withValues(alpha: 0.20),
+              style: GoogleFonts.dmSans(
+                fontSize: 14,
+                color: SynapseColors.inkMuted,
+                height: 1.5,
               ),
               textAlign: TextAlign.center,
             ),
@@ -342,13 +372,8 @@ class _LibraryViewState extends State<LibraryView> {
     );
   }
 
-  // ── Action Strip ──
-
   SliverToBoxAdapter _buildActionStrip(
-    ThemeData theme,
-    ColorScheme colorScheme,
-    SynapseProvider provider,
-  ) {
+      bool isDark, SynapseProvider provider) {
     final unclassified = provider.unclassifiedCount;
     final hasBundles = provider.bundleSuggestions.isNotEmpty;
     final hasDeadLinks = provider.deadLinkCount > 0;
@@ -362,59 +387,73 @@ class _LibraryViewState extends State<LibraryView> {
 
     return SliverToBoxAdapter(
       child: SizedBox(
-        height: 40,
+        height: 44,
         child: ListView(
           scrollDirection: Axis.horizontal,
-          padding: const EdgeInsets.symmetric(horizontal: 16),
+          padding: const EdgeInsets.symmetric(horizontal: 20),
           physics: const BouncingScrollPhysics(),
           children: [
             if (provider.isClassifyingAll)
-              _actionChip(
+              _actionCard(
                 icon: Icons.hourglass_top_rounded,
                 label:
                     '${provider.classifyProgress}/${provider.classifyTotal}',
-                color: SynapseColors.synapseCyan,
+                gradient: SynapseGradients.peachWash,
+                textColor: SynapseColors.ink,
                 onTap: () => provider.cancelClassification(),
               ),
             if (!provider.isClassifyingAll && unclassified > 0)
-              _actionChip(
+              _actionCard(
                 icon: Icons.auto_awesome_rounded,
                 label: 'Classify $unclassified',
-                color: SynapseColors.neuroPurple,
+                gradient: SynapseGradients.accent,
+                textColor: Colors.white,
                 onTap: () => _classifyAll(provider),
               ),
             if (hasBundles)
-              _actionChip(
+              _actionCard(
                 icon: Icons.auto_awesome_mosaic_rounded,
                 label: provider.bundleSuggestions.first.suggestedName,
-                color: SynapseColors.cortexTeal,
+                gradient: LinearGradient(
+                  colors: [
+                    SynapseColors.success,
+                    SynapseColors.success.withValues(alpha: 0.8),
+                  ],
+                ),
+                textColor: Colors.white,
                 onTap: () async {
                   final s = provider.bundleSuggestions.first;
                   await provider.acceptBundleSuggestion(s);
                   if (mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
-                        content:
-                            Text('Cluster "${s.suggestedName}" formed'),
+                        content: Text('Cluster "${s.suggestedName}" formed'),
                       ),
                     );
                   }
                 },
-                trailing: IconButton(
-                  icon: const Icon(Icons.close_rounded, size: 14),
-                  onPressed: () => provider.dismissBundleSuggestion(
+                trailing: GestureDetector(
+                  onTap: () => provider.dismissBundleSuggestion(
                     provider.bundleSuggestions.first,
                   ),
-                  padding: EdgeInsets.zero,
-                  constraints:
-                      const BoxConstraints(minWidth: 24, minHeight: 24),
+                  child: const Padding(
+                    padding: EdgeInsets.only(left: 6),
+                    child: Icon(Icons.close_rounded,
+                        size: 12, color: Colors.white70),
+                  ),
                 ),
               ),
             if (hasDeadLinks)
-              _actionChip(
+              _actionCard(
                 icon: Icons.link_off_rounded,
                 label: '${provider.deadLinkCount} broken',
-                color: theme.colorScheme.error,
+                gradient: LinearGradient(
+                  colors: [
+                    SynapseColors.error,
+                    SynapseColors.error.withValues(alpha: 0.8),
+                  ],
+                ),
+                textColor: Colors.white,
               ),
           ],
         ),
@@ -422,10 +461,11 @@ class _LibraryViewState extends State<LibraryView> {
     );
   }
 
-  Widget _actionChip({
+  Widget _actionCard({
     required IconData icon,
     required String label,
-    required Color color,
+    required Gradient gradient,
+    required Color textColor,
     VoidCallback? onTap,
     Widget? trailing,
   }) {
@@ -434,29 +474,26 @@ class _LibraryViewState extends State<LibraryView> {
       child: GestureDetector(
         onTap: onTap,
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
           decoration: BoxDecoration(
-            color: color.withValues(alpha: 0.08),
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(
-              color: color.withValues(alpha: 0.15),
-              width: 0.5,
-            ),
+            gradient: gradient,
+            borderRadius: BorderRadius.circular(14),
+            boxShadow: SynapseShadows.soft,
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(icon, size: 13, color: color),
-              const SizedBox(width: 5),
+              Icon(icon, size: 14, color: textColor),
+              const SizedBox(width: 6),
               Text(
                 label,
-                style: TextStyle(
-                  fontSize: 11,
+                style: GoogleFonts.dmSans(
+                  fontSize: 12,
                   fontWeight: FontWeight.w600,
-                  color: color,
+                  color: textColor,
                 ),
               ),
-              ?trailing,
+              if (trailing != null) trailing,
             ],
           ),
         ),
@@ -464,13 +501,8 @@ class _LibraryViewState extends State<LibraryView> {
     );
   }
 
-  // ── Filter Row ──
-
   SliverToBoxAdapter _buildFilterRow(
-    ThemeData theme,
-    ColorScheme colorScheme,
-    SynapseProvider provider,
-  ) {
+      bool isDark, SynapseProvider provider) {
     final counts = provider.getCategoryCounts();
     final active = ThoughtCategory.values
         .where((c) => (counts[c] ?? 0) > 0)
@@ -478,13 +510,13 @@ class _LibraryViewState extends State<LibraryView> {
 
     return SliverToBoxAdapter(
       child: SizedBox(
-        height: 36,
+        height: 42,
         child: ListView(
           scrollDirection: Axis.horizontal,
-          padding: const EdgeInsets.symmetric(horizontal: 16),
+          padding: const EdgeInsets.symmetric(horizontal: 20),
           physics: const BouncingScrollPhysics(),
           children: [
-            _filterChip(
+            _filterPill(
               label: 'All',
               isSelected: provider.selectedCategory == null &&
                   provider.selectedGroup == null,
@@ -492,28 +524,23 @@ class _LibraryViewState extends State<LibraryView> {
                 provider.filterByCategory(null);
                 provider.filterByGroup(null);
               },
-              colorScheme: colorScheme,
             ),
-            ...active.map((cat) => _filterChip(
+            ...active.map((cat) => _filterPill(
                   label: '${cat.emoji} ${cat.label}',
                   isSelected: provider.selectedCategory == cat,
                   onTap: () => provider.filterByCategory(cat),
-                  colorScheme: colorScheme,
                 )),
             if (provider.groups.isNotEmpty) ...[
               Container(
                 width: 1,
-                height: 14,
+                height: 16,
                 margin: const EdgeInsets.symmetric(
-                  horizontal: 4,
-                  vertical: 8,
-                ),
-                color: colorScheme.onSurface.withValues(alpha: 0.06),
+                    horizontal: 6, vertical: 12),
+                color: SynapseColors.ink.withValues(alpha: 0.06),
               ),
               ...provider.groups.map((g) {
                 final isSelected = provider.selectedGroup?.id == g.id;
-                final c = Color(g.color);
-                return _filterChip(
+                return _filterPill(
                   label: g.name,
                   isSelected: isSelected,
                   onTap: () =>
@@ -521,11 +548,8 @@ class _LibraryViewState extends State<LibraryView> {
                   onLongPress: () => Navigator.push(
                     context,
                     SynapsePageRoute(
-                      builder: (_) => GroupDetailScreen(group: g),
-                    ),
+                        builder: (_) => GroupDetailScreen(group: g)),
                   ),
-                  colorScheme: colorScheme,
-                  accentColor: c,
                 );
               }),
             ],
@@ -533,19 +557,17 @@ class _LibraryViewState extends State<LibraryView> {
               onTap: () => _showCreateGroupDialog(provider),
               child: Container(
                 margin: const EdgeInsets.only(right: 6),
-                padding: const EdgeInsets.symmetric(horizontal: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                alignment: Alignment.center,
                 decoration: BoxDecoration(
+                  color: SynapseColors.ink.withValues(alpha: 0.03),
+                  borderRadius: BorderRadius.circular(100),
                   border: Border.all(
-                    color: colorScheme.onSurface.withValues(alpha: 0.06),
-                    width: 0.5,
+                    color: SynapseColors.ink.withValues(alpha: 0.06),
                   ),
-                  borderRadius: BorderRadius.circular(10),
                 ),
-                child: Icon(
-                  Icons.add_rounded,
-                  size: 14,
-                  color: colorScheme.onSurface.withValues(alpha: 0.25),
-                ),
+                child: Icon(Icons.add_rounded,
+                    size: 14, color: SynapseColors.inkFaint),
               ),
             ),
           ],
@@ -554,44 +576,35 @@ class _LibraryViewState extends State<LibraryView> {
     );
   }
 
-  Widget _filterChip({
+  Widget _filterPill({
     required String label,
     required bool isSelected,
     required VoidCallback onTap,
-    required ColorScheme colorScheme,
     VoidCallback? onLongPress,
-    Color? accentColor,
   }) {
-    final color = accentColor ?? colorScheme.primary;
     return Padding(
-      padding: const EdgeInsets.only(right: 5),
+      padding: const EdgeInsets.only(right: 6),
       child: GestureDetector(
         onTap: onTap,
         onLongPress: onLongPress,
         child: AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
-          curve: Curves.easeOutCubic,
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           decoration: BoxDecoration(
-            color: isSelected
-                ? color.withValues(alpha: 0.12)
-                : Colors.transparent,
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(
-              color: isSelected
-                  ? color.withValues(alpha: 0.3)
-                  : colorScheme.onSurface.withValues(alpha: 0.05),
-              width: 0.5,
-            ),
+            color: isSelected ? SynapseColors.ink : Colors.white,
+            borderRadius: BorderRadius.circular(100),
+            border: isSelected
+                ? null
+                : Border.all(
+                    color: SynapseColors.ink.withValues(alpha: 0.06),
+                  ),
           ),
           child: Text(
             label,
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-              color: isSelected
-                  ? color
-                  : colorScheme.onSurface.withValues(alpha: 0.4),
+            style: GoogleFonts.dmSans(
+              fontSize: 12,
+              fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+              color: isSelected ? Colors.white : SynapseColors.inkMuted,
             ),
           ),
         ),
@@ -599,11 +612,9 @@ class _LibraryViewState extends State<LibraryView> {
     );
   }
 
-  // ── List ──
-
   SliverPadding _buildList(SynapseProvider provider) {
     return SliverPadding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 100),
       sliver: SliverList(
         delegate: SliverChildBuilderDelegate(
           (context, index) {
@@ -611,10 +622,9 @@ class _LibraryViewState extends State<LibraryView> {
             final isSelected = _selectedIds.contains(thought.id);
 
             return Padding(
-              padding: const EdgeInsets.only(bottom: 10),
+              padding: const EdgeInsets.only(bottom: 12),
               child: _isSelecting
-                  ? _buildSelectableCard(
-                      thought, isSelected, Theme.of(context).colorScheme)
+                  ? _buildSelectableCard(thought, isSelected)
                   : GestureDetector(
                       onLongPress: () => _enterSelectionMode(thought),
                       child: ThoughtCard(
@@ -632,11 +642,8 @@ class _LibraryViewState extends State<LibraryView> {
     );
   }
 
-  Widget _buildSelectableCard(
-    Thought thought,
-    bool isSelected,
-    ColorScheme colorScheme,
-  ) {
+  Widget _buildSelectableCard(Thought thought, bool isSelected) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return GestureDetector(
       onTap: () {
         setState(() {
@@ -650,11 +657,10 @@ class _LibraryViewState extends State<LibraryView> {
       },
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 180),
-        curve: Curves.easeOutCubic,
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: BorderRadius.circular(22),
           border: isSelected
-              ? Border.all(color: SynapseColors.neuroPurple, width: 2)
+              ? Border.all(color: SynapseColors.accent, width: 2)
               : null,
         ),
         child: Stack(
@@ -667,23 +673,26 @@ class _LibraryViewState extends State<LibraryView> {
               ),
             ),
             Positioned(
-              top: 10,
-              right: 10,
+              top: 12,
+              right: 12,
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 180),
-                width: 22,
-                height: 22,
+                width: 24,
+                height: 24,
                 decoration: BoxDecoration(
                   color: isSelected
-                      ? SynapseColors.neuroPurple
-                      : Colors.white.withValues(alpha: 0.8),
+                      ? SynapseColors.accent
+                      : (isDark
+                          ? SynapseColors.darkCard
+                          : Colors.white),
                   shape: BoxShape.circle,
                   border: Border.all(
                     color: isSelected
-                        ? SynapseColors.neuroPurple
-                        : Colors.black.withValues(alpha: 0.15),
+                        ? SynapseColors.accent
+                        : SynapseColors.inkFaint,
                     width: 1.5,
                   ),
+                  boxShadow: SynapseShadows.soft,
                 ),
                 child: isSelected
                     ? const Icon(Icons.check_rounded,
@@ -696,8 +705,6 @@ class _LibraryViewState extends State<LibraryView> {
       ),
     );
   }
-
-  // ── Actions ──
 
   void _enterSelectionMode(Thought thought) {
     HapticFeedback.mediumImpact();
@@ -735,7 +742,7 @@ class _LibraryViewState extends State<LibraryView> {
               _exitSelectionMode();
             },
             style: FilledButton.styleFrom(
-              backgroundColor: Theme.of(context).colorScheme.error,
+              backgroundColor: SynapseColors.error,
             ),
             child: const Text('Delete'),
           ),
@@ -863,9 +870,6 @@ class _LibraryViewState extends State<LibraryView> {
 
     showModalBottomSheet(
       context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
       builder: (ctx) {
         return SafeArea(
           child: Padding(
@@ -879,24 +883,27 @@ class _LibraryViewState extends State<LibraryView> {
                     width: 36,
                     height: 4,
                     decoration: BoxDecoration(
-                      color: Theme.of(ctx)
-                          .colorScheme
-                          .onSurface
-                          .withValues(alpha: 0.12),
+                      color: SynapseColors.ink.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(2),
                     ),
                   ),
                 ),
                 const SizedBox(height: 16),
                 Text('Add to cluster',
-                    style: Theme.of(ctx).textTheme.titleLarge),
+                    style: GoogleFonts.fraunces(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                    )),
                 const SizedBox(height: 12),
                 if (groups.isEmpty)
                   Padding(
                     padding: const EdgeInsets.symmetric(vertical: 20),
                     child: Center(
                       child: Text('No clusters yet',
-                          style: Theme.of(ctx).textTheme.bodyMedium),
+                          style: GoogleFonts.dmSans(
+                            fontSize: 13,
+                            color: SynapseColors.inkMuted,
+                          )),
                     ),
                   )
                 else
@@ -912,8 +919,8 @@ class _LibraryViewState extends State<LibraryView> {
                                 size: 12, color: Colors.white)
                             : null,
                       ),
-                      title:
-                          Text(g.name, style: const TextStyle(fontSize: 14)),
+                      title: Text(g.name,
+                          style: GoogleFonts.dmSans(fontSize: 14)),
                       trailing: isMember
                           ? TextButton(
                               onPressed: () {

@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:timeago/timeago.dart' as timeago;
 import '../models/thought.dart';
 import '../theme/app_theme.dart';
@@ -21,71 +22,17 @@ class ThoughtCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-    final isGlass = SynapseStyle.of(context);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    Widget card = thought.type == ThoughtType.link
-        ? _LinkRow(thought: thought, onCluster: onCluster)
-        : _ScreenshotRow(thought: thought, onCluster: onCluster);
-
-    card = Container(
-      decoration: isGlass
-          ? BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: isDark
-                    ? [
-                        Colors.white.withValues(alpha: 0.08),
-                        Colors.white.withValues(alpha: 0.04),
-                      ]
-                    : [
-                        Colors.white.withValues(alpha: 0.65),
-                        Colors.white.withValues(alpha: 0.40),
-                      ],
-              ),
-              borderRadius: BorderRadius.circular(18),
-              border: Border.all(
-                color: isDark
-                    ? Colors.white.withValues(alpha: 0.12)
-                    : Colors.white.withValues(alpha: 0.70),
-                width: 0.5,
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: isDark ? 0.25 : 0.06),
-                  blurRadius: 12,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-            )
-          : BoxDecoration(
-              color:
-                  isDark ? SynapseColors.darkCard : SynapseColors.lightCard,
-              borderRadius: BorderRadius.circular(18),
-              border: Border.all(
-                color: isDark
-                    ? SynapseColors.darkCardBorder
-                    : SynapseColors.lightCardBorder,
-                width: 0.5,
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: SynapseColors.neuroPurple
-                      .withValues(alpha: isDark ? 0.08 : 0.05),
-                  blurRadius: 16,
-                  offset: const Offset(0, 4),
-                ),
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.04),
-                  blurRadius: 8,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-            ),
+    final card = Container(
+      decoration: SynapseDecoration.pastelCard(
+        category: thought.category,
+        dark: isDark,
+      ),
       clipBehavior: Clip.antiAlias,
-      child: card,
+      child: thought.type == ThoughtType.link
+          ? _LinkCard(thought: thought, onCluster: onCluster)
+          : _ScreenshotCard(thought: thought, onCluster: onCluster),
     );
 
     return Dismissible(
@@ -95,11 +42,11 @@ class ThoughtCard extends StatelessWidget {
         alignment: Alignment.centerRight,
         padding: const EdgeInsets.only(right: 28),
         decoration: BoxDecoration(
-          color: theme.colorScheme.error,
-          borderRadius: BorderRadius.circular(18),
+          color: SynapseColors.error.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(20),
         ),
-        child: const Icon(Icons.delete_outline_rounded,
-            color: Colors.white, size: 22),
+        child: Icon(Icons.delete_outline_rounded,
+            color: SynapseColors.error, size: 22),
       ),
       onDismissed: (_) => onDelete(),
       child: GestureDetector(onTap: onTap, child: card),
@@ -107,194 +54,217 @@ class ThoughtCard extends StatelessWidget {
   }
 }
 
-class _LinkRow extends StatelessWidget {
+class _LinkCard extends StatelessWidget {
   final Thought thought;
   final VoidCallback? onCluster;
-  const _LinkRow({required this.thought, this.onCluster});
+  const _LinkCard({required this.thought, this.onCluster});
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-    final muted = theme.colorScheme.onSurface.withValues(alpha: 0.4);
-    final hasImage = thought.previewImageUrl != null &&
-        thought.previewImageUrl!.isNotEmpty;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final hasImage =
+        thought.previewImageUrl != null && thought.previewImageUrl!.isNotEmpty;
 
-    return Padding(
-      padding: const EdgeInsets.all(12),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (hasImage)
-            Padding(
-              padding: const EdgeInsets.only(right: 12),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(12),
-                child: SizedBox(
-                  width: 72,
-                  height: 72,
-                  child: CachedNetworkImage(
-                    imageUrl: thought.previewImageUrl!,
-                    fit: BoxFit.cover,
-                    fadeInDuration: const Duration(milliseconds: 150),
-                    placeholder: (c, u) => Container(
-                      color: isDark
-                          ? Colors.white.withValues(alpha: 0.04)
-                          : const Color(0xFFF0EDFF),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (hasImage)
+          Stack(
+            children: [
+              AspectRatio(
+                aspectRatio: 2.2,
+                child: CachedNetworkImage(
+                  imageUrl: thought.previewImageUrl!,
+                  fit: BoxFit.cover,
+                  fadeInDuration: const Duration(milliseconds: 200),
+                  placeholder: (c, u) => Container(
+                    decoration: BoxDecoration(
+                      gradient: SynapseGradients.peachWash,
                     ),
-                    errorWidget: (c, u, e) => Container(
-                      color: isDark
-                          ? Colors.white.withValues(alpha: 0.04)
-                          : const Color(0xFFF0EDFF),
+                  ),
+                  errorWidget: (c, u, e) => Container(
+                    decoration: BoxDecoration(
+                      gradient: SynapseGradients.peachWash,
+                    ),
+                    child: Center(
                       child: Icon(Icons.language_rounded,
-                          size: 20, color: muted),
+                          size: 24, color: SynapseColors.inkFaint),
                     ),
                   ),
                 ),
               ),
-            ),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Source
-                Row(
-                  children: [
-                    if (thought.favicon != null &&
-                        thought.favicon!.isNotEmpty)
-                      Padding(
-                        padding: const EdgeInsets.only(right: 5),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(3),
-                          child: CachedNetworkImage(
-                            imageUrl: thought.favicon!,
-                            width: 12, height: 12,
-                            errorWidget: (c, u, e) =>
-                                const SizedBox.shrink(),
+              Positioned.fill(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: isDark
+                          ? [
+                              Colors.transparent,
+                              Colors.black.withValues(alpha: 0.6),
+                              SynapseColors.categoryTint(thought.category, dark: true),
+                            ]
+                          : [
+                              Colors.transparent,
+                              SynapseColors.categoryTint(thought.category).withValues(alpha: 0.5),
+                              SynapseColors.categoryTint(thought.category),
+                            ],
+                      stops: const [0.45, 0.8, 1.0],
+                    ),
+                  ),
+                ),
+              ),
+              if (thought.isClassified)
+                Positioned(
+                  top: 10,
+                  right: 10,
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: SynapseColors.success.withValues(alpha: 0.9),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.check_rounded,
+                            size: 10, color: Colors.white),
+                        const SizedBox(width: 3),
+                        Text(
+                          'Wired',
+                          style: GoogleFonts.dmSans(
+                            fontSize: 9,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white,
                           ),
                         ),
-                      ),
-                    Expanded(
-                      child: Text(
-                        thought.siteName ?? '',
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w500,
-                          color: muted,
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
+                      ],
                     ),
-                  ],
+                  ),
                 ),
-                const SizedBox(height: 4),
-
-                // Title
+            ],
+          ),
+        Padding(
+          padding: EdgeInsets.fromLTRB(16, hasImage ? 0 : 16, 16, 14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (!hasImage) const SizedBox(height: 2),
+              if (thought.siteName != null && thought.siteName!.isNotEmpty)
+                Padding(
+                  padding: EdgeInsets.only(bottom: 5, top: hasImage ? 0 : 0),
+                  child: Text(
+                    thought.siteName!.toUpperCase(),
+                    style: GoogleFonts.dmSans(
+                      fontSize: 9,
+                      fontWeight: FontWeight.w600,
+                      color: SynapseColors.inkMuted,
+                      letterSpacing: 1.2,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              Text(
+                thought.displayTitle,
+                style: GoogleFonts.fraunces(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                  color: isDark ? SynapseColors.darkInk : SynapseColors.ink,
+                  height: 1.25,
+                  letterSpacing: -0.3,
+                ),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+              if (thought.description != null &&
+                  thought.description!.isNotEmpty) ...[
+                const SizedBox(height: 5),
                 Text(
-                  thought.displayTitle,
-                  style: theme.textTheme.titleLarge?.copyWith(
-                    fontSize: 14,
-                    height: 1.25,
-                    letterSpacing: -0.2,
-                    fontWeight: FontWeight.w700,
+                  thought.description!,
+                  style: GoogleFonts.dmSans(
+                    fontSize: 13,
+                    color: SynapseColors.inkMuted,
+                    height: 1.4,
                   ),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                 ),
-
-                if (thought.description != null &&
-                    thought.description!.isNotEmpty) ...[
-                  const SizedBox(height: 2),
-                  Text(
-                    thought.description!,
-                    style: TextStyle(
-                      fontSize: 12,
-                      height: 1.3,
-                      color: theme.colorScheme.onSurface
-                          .withValues(alpha: 0.45),
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
-
-                const SizedBox(height: 6),
-                _MetaRow(thought: thought, onCluster: onCluster),
               ],
-            ),
+              const SizedBox(height: 12),
+              _MetaRow(
+                  thought: thought,
+                  onCluster: onCluster,
+                  showWiredBadge: !hasImage),
+            ],
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
 
-class _ScreenshotRow extends StatelessWidget {
+class _ScreenshotCard extends StatelessWidget {
   final Thought thought;
   final VoidCallback? onCluster;
-  const _ScreenshotRow({required this.thought, this.onCluster});
+  const _ScreenshotCard({required this.thought, this.onCluster});
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return SizedBox(
-      height: 88,
+      height: 100,
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           if (thought.imagePath != null)
             SizedBox(
-              width: 72,
+              width: 80,
               child: ClipRRect(
                 borderRadius: const BorderRadius.only(
-                  topLeft: Radius.circular(18),
-                  bottomLeft: Radius.circular(18),
+                  topLeft: Radius.circular(20),
+                  bottomLeft: Radius.circular(20),
                 ),
-                child: Image.file(
-                  File(thought.imagePath!),
-                  fit: BoxFit.cover,
-                  cacheWidth: 180,
-                  errorBuilder: (c, e, s) => ColoredBox(
-                    color: SynapseColors.neuroPurple.withValues(alpha: 0.05),
-                  ),
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    Image.file(
+                      File(thought.imagePath!),
+                      fit: BoxFit.cover,
+                      cacheWidth: 200,
+                      errorBuilder: (c, e, s) => Container(
+                        decoration: BoxDecoration(
+                          gradient: SynapseGradients.peachWash,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
           Expanded(
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(12, 12, 12, 10),
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Text(
                     thought.displayTitle,
-                    style: theme.textTheme.titleLarge?.copyWith(
-                      fontSize: 13,
-                      height: 1.25,
+                    style: GoogleFonts.fraunces(
+                      fontSize: 15,
                       fontWeight: FontWeight.w700,
-                      letterSpacing: -0.15,
+                      color: isDark
+                          ? SynapseColors.darkInk
+                          : SynapseColors.ink,
+                      height: 1.25,
                     ),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                   ),
-                  if (thought.extractedInfo != null &&
-                      thought.extractedInfo!.isNotEmpty) ...[
-                    const SizedBox(height: 3),
-                    Text(
-                      thought.extractedInfo!,
-                      style: TextStyle(
-                        fontSize: 11,
-                        height: 1.3,
-                        color: theme.colorScheme.onSurface
-                            .withValues(alpha: 0.4),
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                  const SizedBox(height: 6),
+                  const Spacer(),
                   _MetaRow(thought: thought, onCluster: onCluster),
                 ],
               ),
@@ -309,38 +279,50 @@ class _ScreenshotRow extends StatelessWidget {
 class _MetaRow extends StatelessWidget {
   final Thought thought;
   final VoidCallback? onCluster;
-  const _MetaRow({required this.thought, this.onCluster});
+  final bool showWiredBadge;
+  const _MetaRow({
+    required this.thought,
+    this.onCluster,
+    this.showWiredBadge = true,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final muted =
-        Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.3);
-    final hasCat = thought.category != ThoughtCategory.other ||
-        thought.isClassified;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final hasCat =
+        thought.category != ThoughtCategory.other || thought.isClassified;
 
     return Row(
       children: [
         if (hasCat) ...[
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
             decoration: BoxDecoration(
-              color: SynapseColors.neuroPurple.withValues(alpha: 0.08),
-              borderRadius: BorderRadius.circular(6),
+              color: isDark
+                  ? SynapseColors.darkAccent.withValues(alpha: 0.12)
+                  : SynapseColors.categoryAccent(thought.category)
+                      .withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(100),
             ),
             child: Text(
               '${thought.category.emoji} ${thought.category.label}',
-              style: TextStyle(
+              style: GoogleFonts.dmSans(
                 fontSize: 10,
                 fontWeight: FontWeight.w600,
-                color: SynapseColors.neuroPurple.withValues(alpha: 0.7),
+                color: isDark
+                    ? SynapseColors.darkAccent
+                    : SynapseColors.categoryAccent(thought.category),
               ),
             ),
           ),
-          _dot(muted),
+          const SizedBox(width: 6),
         ],
         Text(
           timeago.format(thought.createdAt),
-          style: TextStyle(fontSize: 10, color: muted),
+          style: GoogleFonts.dmSans(
+            fontSize: 10,
+            color: SynapseColors.inkFaint,
+          ),
         ),
         const Spacer(),
         if (onCluster != null)
@@ -348,38 +330,35 @@ class _MetaRow extends StatelessWidget {
             onTap: onCluster,
             behavior: HitTestBehavior.opaque,
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-              child: Icon(Icons.workspaces_outline, size: 14, color: muted),
+              padding: const EdgeInsets.all(2),
+              child: Icon(Icons.workspaces_outline,
+                  size: 14, color: SynapseColors.inkFaint),
             ),
           ),
-        if (thought.isClassified)
-          Icon(Icons.auto_awesome_rounded,
-              size: 12, color: SynapseColors.neuroPurple.withValues(alpha: 0.4))
-        else if (thought.type == ThoughtType.link)
-          _WiringIndicator(),
+        if (showWiredBadge) ...[
+          const SizedBox(width: 4),
+          if (thought.isClassified)
+            Container(
+              padding: const EdgeInsets.all(2),
+              decoration: BoxDecoration(
+                color: SynapseColors.success.withValues(alpha: 0.1),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(Icons.check_rounded,
+                  size: 10,
+                  color: SynapseColors.success),
+            )
+          else if (thought.type == ThoughtType.link)
+            SizedBox(
+              width: 10,
+              height: 10,
+              child: CircularProgressIndicator(
+                strokeWidth: 1.5,
+                color: SynapseColors.inkFaint,
+              ),
+            ),
+        ],
       ],
-    );
-  }
-
-  Widget _dot(Color c) => Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 5),
-        child: Text('·', style: TextStyle(color: c, fontSize: 10)),
-      );
-}
-
-class _WiringIndicator extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Tooltip(
-      message: 'Wiring pending',
-      child: SizedBox(
-        width: 12,
-        height: 12,
-        child: CircularProgressIndicator(
-          strokeWidth: 1.5,
-          color: SynapseColors.neuroPurple.withValues(alpha: 0.5),
-        ),
-      ),
     );
   }
 }

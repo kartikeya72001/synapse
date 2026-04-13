@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import '../providers/synapse_provider.dart';
@@ -28,73 +29,51 @@ class _AddThoughtScreenState extends State<AddThoughtScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
-    final isGlass = SynapseStyle.of(context);
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
     return Scaffold(
-      extendBodyBehindAppBar: isGlass,
       appBar: AppBar(
-        title: ShaderMask(
-          shaderCallback: (bounds) =>
-              SynapseColors.gradientPrimary.createShader(bounds),
-          child: Text(
-            'New Synapse',
-            style: theme.appBarTheme.titleTextStyle?.copyWith(color: Colors.white),
+        title: Text(
+          'New Memory',
+          style: GoogleFonts.fraunces(
+            fontSize: 18,
+            fontWeight: FontWeight.w600,
+            color: theme.appBarTheme.foregroundColor ?? colorScheme.onSurface,
           ),
         ),
       ),
-      body: Container(
-        decoration: isGlass
-            ? BoxDecoration(
-                gradient: isDark
-                    ? SynapseColors.gradientAurora
-                    : SynapseColors.gradientAuroraLight,
-              )
-            : null,
-        child: Padding(
-          padding: EdgeInsets.fromLTRB(
-            20,
-            isGlass ? kToolbarHeight + MediaQuery.of(context).padding.top + 20 : 20,
-            20,
-            20,
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              _buildTabSelector(colorScheme),
-              const SizedBox(height: 32),
-              Expanded(
-                child: _selectedTab == 0
-                    ? _buildLinkTab(theme, colorScheme)
-                    : _buildScreenshotTab(theme, colorScheme),
-              ),
-            ],
-          ),
+      body: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _buildTabSelector(context),
+            const SizedBox(height: 32),
+            Expanded(
+              child: _selectedTab == 0
+                  ? _buildLinkTab(theme, colorScheme)
+                  : _buildScreenshotTab(theme, colorScheme),
+            ),
+          ],
         ),
       ),
     );
   }
 
-  Widget _buildTabSelector(ColorScheme colorScheme) {
+  Widget _buildTabSelector(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       padding: const EdgeInsets.all(4),
-      decoration: BoxDecoration(
-        color: colorScheme.primary.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(14),
-      ),
+      decoration: SynapseDecoration.card(dark: isDark),
       child: Row(
         children: [
           _buildTab(
             index: 0,
             icon: Icons.link_rounded,
             label: 'Link',
-            colorScheme: colorScheme,
           ),
           _buildTab(
             index: 1,
             icon: Icons.image_rounded,
             label: 'Screenshot',
-            colorScheme: colorScheme,
           ),
         ],
       ),
@@ -105,7 +84,6 @@ class _AddThoughtScreenState extends State<AddThoughtScreen> {
     required int index,
     required IconData icon,
     required String label,
-    required ColorScheme colorScheme,
   }) {
     final isSelected = _selectedTab == index;
     return Expanded(
@@ -115,7 +93,7 @@ class _AddThoughtScreenState extends State<AddThoughtScreen> {
           duration: const Duration(milliseconds: 200),
           padding: const EdgeInsets.symmetric(vertical: 12),
           decoration: BoxDecoration(
-            color: isSelected ? colorScheme.primary : Colors.transparent,
+            color: isSelected ? SynapseColors.accent : Colors.transparent,
             borderRadius: BorderRadius.circular(10),
           ),
           child: Row(
@@ -124,18 +102,14 @@ class _AddThoughtScreenState extends State<AddThoughtScreen> {
               Icon(
                 icon,
                 size: 20,
-                color: isSelected
-                    ? colorScheme.onPrimary
-                    : colorScheme.primary,
+                color: isSelected ? Colors.white : SynapseColors.inkMuted,
               ),
               const SizedBox(width: 8),
               Text(
                 label,
                 style: TextStyle(
                   fontWeight: FontWeight.w600,
-                  color: isSelected
-                      ? colorScheme.onPrimary
-                      : colorScheme.primary,
+                  color: isSelected ? Colors.white : SynapseColors.inkMuted,
                 ),
               ),
             ],
@@ -151,7 +125,11 @@ class _AddThoughtScreenState extends State<AddThoughtScreen> {
       children: [
         Text(
           'Feed a link',
-          style: theme.textTheme.headlineSmall,
+          style: GoogleFonts.fraunces(
+            fontSize: 24,
+            fontWeight: FontWeight.w800,
+            color: colorScheme.onSurface,
+          ),
         ),
         const SizedBox(height: 8),
         Text(
@@ -171,42 +149,34 @@ class _AddThoughtScreenState extends State<AddThoughtScreen> {
         ),
         const SizedBox(height: 24),
         Container(
-          width: double.infinity,
           decoration: BoxDecoration(
-            gradient: SynapseColors.gradientPrimary,
+            color: SynapseColors.ink,
             borderRadius: BorderRadius.circular(14),
           ),
-          child: Material(
-            color: Colors.transparent,
-            child: InkWell(
-              borderRadius: BorderRadius.circular(14),
-              onTap: _isLoading ? null : _saveLink,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    if (_isLoading)
-                      const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Colors.white,
-                        ),
-                      )
-                    else
-                      const Icon(Icons.save_rounded, color: Colors.white, size: 20),
-                    const SizedBox(width: 8),
-                    Text(
-                      _isLoading ? 'Absorbing...' : 'Commit to Memory',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w600,
-                      ),
+          child: FilledButton.icon(
+            onPressed: _isLoading ? null : _saveLink,
+            icon: _isLoading
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
                     ),
-                  ],
-                ),
+                  )
+                : const Icon(Icons.save_rounded, size: 20),
+            label: Text(_isLoading ? 'Saving...' : 'Save Memory'),
+            style: FilledButton.styleFrom(
+              backgroundColor: Colors.transparent,
+              foregroundColor: Colors.white,
+              shadowColor: Colors.transparent,
+              surfaceTintColor: Colors.transparent,
+              elevation: 0,
+              disabledBackgroundColor: Colors.transparent,
+              disabledForegroundColor: Colors.white70,
+              minimumSize: const Size(double.infinity, 48),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
               ),
             ),
           ),
@@ -216,12 +186,17 @@ class _AddThoughtScreenState extends State<AddThoughtScreen> {
   }
 
   Widget _buildScreenshotTab(ThemeData theme, ColorScheme colorScheme) {
+    final isDark = theme.brightness == Brightness.dark;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Text(
           'Capture a memory',
-          style: theme.textTheme.headlineSmall,
+          style: GoogleFonts.fraunces(
+            fontSize: 24,
+            fontWeight: FontWeight.w800,
+            color: colorScheme.onSurface,
+          ),
         ),
         const SizedBox(height: 8),
         Text(
@@ -234,6 +209,7 @@ class _AddThoughtScreenState extends State<AddThoughtScreen> {
           label: 'Choose from Gallery',
           onTap: () => _pickImage(ImageSource.gallery),
           colorScheme: colorScheme,
+          isDark: isDark,
         ),
         const SizedBox(height: 16),
         _buildImagePickerCard(
@@ -241,6 +217,7 @@ class _AddThoughtScreenState extends State<AddThoughtScreen> {
           label: 'Take a Photo',
           onTap: () => _pickImage(ImageSource.camera),
           colorScheme: colorScheme,
+          isDark: isDark,
         ),
       ],
     );
@@ -251,27 +228,22 @@ class _AddThoughtScreenState extends State<AddThoughtScreen> {
     required String label,
     required VoidCallback onTap,
     required ColorScheme colorScheme,
+    required bool isDark,
   }) {
     return GestureDetector(
       onTap: _isLoading ? null : onTap,
       child: Container(
         padding: const EdgeInsets.all(24),
-        decoration: BoxDecoration(
-          color: colorScheme.surfaceContainerHighest,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: colorScheme.outlineVariant.withValues(alpha: 0.3),
-          ),
-        ),
+        decoration: SynapseDecoration.card(dark: isDark),
         child: Row(
           children: [
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: colorScheme.primary.withValues(alpha: 0.1),
+                color: SynapseColors.lavenderLight,
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: Icon(icon, color: colorScheme.primary),
+              child: Icon(icon, color: SynapseColors.accent),
             ),
             const SizedBox(width: 16),
             Text(

@@ -15,7 +15,6 @@ import '../utils/url_utils.dart' as url_utils;
 import '../services/debug_logger.dart';
 
 enum AppThemeMode { system, light, dark }
-enum AppVisualStyle { materialYou, materialGlass }
 
 class BundleSuggestion {
   final String suggestedName;
@@ -60,7 +59,6 @@ class SynapseProvider extends ChangeNotifier {
   int _classifyProgress = 0;
   int _classifyTotal = 0;
   AppThemeMode _themeMode = AppThemeMode.system;
-  AppVisualStyle _visualStyle = AppVisualStyle.materialYou;
 
   // Groups
   List<ThoughtGroup> _groups = [];
@@ -106,8 +104,6 @@ class SynapseProvider extends ChangeNotifier {
   int get classifyProgress => _classifyProgress;
   int get classifyTotal => _classifyTotal;
   AppThemeMode get themeMode => _themeMode;
-  AppVisualStyle get visualStyle => _visualStyle;
-  bool get isGlass => _visualStyle == AppVisualStyle.materialGlass;
   List<ThoughtGroup> get groups => _groups;
   ThoughtGroup? get selectedGroup => _selectedGroup;
   List<BundleSuggestion> get bundleSuggestions =>
@@ -170,23 +166,12 @@ class SynapseProvider extends ChangeNotifier {
         _themeMode = AppThemeMode.system;
     }
 
-    final style = prefs.getString(AppConstants.visualStylePref);
-    _visualStyle = style == 'materialGlass'
-        ? AppVisualStyle.materialGlass
-        : AppVisualStyle.materialYou;
   }
 
   Future<void> setThemeMode(AppThemeMode mode) async {
     _themeMode = mode;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(AppConstants.themePref, mode.name);
-    notifyListeners();
-  }
-
-  Future<void> setVisualStyle(AppVisualStyle style) async {
-    _visualStyle = style;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(AppConstants.visualStylePref, style.name);
     notifyListeners();
   }
 

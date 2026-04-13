@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:timeago/timeago.dart' as timeago;
 import '../models/thought.dart';
@@ -58,13 +59,18 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final groupColor = Color(_group.color);
-    final isGlass = SynapseStyle.of(context);
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
     return Scaffold(
-      extendBodyBehindAppBar: isGlass,
       appBar: AppBar(
-        title: Text(_group.name, style: theme.appBarTheme.titleTextStyle),
+        title: Text(
+          _group.name,
+          style: GoogleFonts.fraunces(
+            fontSize: 18,
+            fontWeight: FontWeight.w600,
+            color: theme.appBarTheme.titleTextStyle?.color ??
+                theme.appBarTheme.foregroundColor ??
+                colorScheme.onSurface,
+          ),
+        ),
         backgroundColor: groupColor.withValues(alpha: 0.08),
         actions: [
           IconButton(
@@ -79,45 +85,46 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
           ),
         ],
       ),
-      body: Container(
-        decoration: isGlass
-            ? BoxDecoration(
-                gradient: isDark
-                    ? SynapseColors.gradientAurora
-                    : SynapseColors.gradientAuroraLight,
-              )
-            : null,
-        child: Column(
+      body: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            SizedBox(
-              height: isGlass ? kToolbarHeight + MediaQuery.of(context).padding.top : 0,
-            ),
             _buildHeader(theme, colorScheme, groupColor),
             Expanded(child: _buildThoughtsList(theme, colorScheme)),
           ],
         ),
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _showAddThoughtsDialog(theme, colorScheme),
-        icon: const Icon(Icons.add_rounded),
-        label: const Text('Wire Thoughts'),
-        backgroundColor: groupColor,
-        foregroundColor: Colors.white,
+      floatingActionButton: Container(
+        decoration: BoxDecoration(
+          color: groupColor,
+          borderRadius: BorderRadius.circular(18),
+          boxShadow: SynapseShadows.soft,
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: FloatingActionButton.extended(
+          onPressed: () => _showAddThoughtsDialog(theme, colorScheme),
+          elevation: 0,
+          focusElevation: 0,
+          hoverElevation: 0,
+          highlightElevation: 0,
+          backgroundColor: Colors.transparent,
+          foregroundColor: Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
+          ),
+          icon: const Icon(Icons.add_rounded),
+          label: const Text('Wire Thoughts'),
+        ),
       ),
     );
   }
 
   Widget _buildHeader(ThemeData theme, ColorScheme colorScheme, Color groupColor) {
+    final isDark = theme.brightness == Brightness.dark;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
-      decoration: BoxDecoration(
-        color: groupColor.withValues(alpha: 0.06),
+      decoration: SynapseDecoration.card(dark: isDark).copyWith(
         border: Border(
-          bottom: BorderSide(
-            color: groupColor.withValues(alpha: 0.15),
-          ),
+          left: BorderSide(color: groupColor, width: 3),
         ),
       ),
       child: Column(
@@ -166,8 +173,9 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(100),
         border: Border.all(color: color.withValues(alpha: 0.25)),
+        boxShadow: SynapseShadows.soft,
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -197,19 +205,17 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            ShaderMask(
-              shaderCallback: (bounds) =>
-                  SynapseColors.gradientPrimary.createShader(bounds),
-              child: Icon(
-                Icons.lightbulb_outline_rounded,
-                size: 56,
-                color: Colors.white,
-              ),
+            Icon(
+              Icons.lightbulb_outline_rounded,
+              size: 56,
+              color: SynapseColors.accent.withValues(alpha: 0.3),
             ),
             const SizedBox(height: 16),
             Text(
               'No synapses in this cluster yet',
-              style: theme.textTheme.titleMedium?.copyWith(
+              style: GoogleFonts.fraunces(
+                fontSize: theme.textTheme.titleMedium?.fontSize ?? 16,
+                fontWeight: FontWeight.w600,
                 color: colorScheme.onSurface.withValues(alpha: 0.4),
               ),
             ),
@@ -237,68 +243,76 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
   }
 
   Widget _buildThoughtTile(Thought thought, ThemeData theme, ColorScheme colorScheme) {
-    return ListTile(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-      leading: Container(
-        padding: const EdgeInsets.all(8),
-        decoration: BoxDecoration(
-          color: colorScheme.primary.withValues(alpha: 0.08),
-          borderRadius: BorderRadius.circular(10),
-        ),
-        child: Icon(
-          thought.type == ThoughtType.link ? Icons.link_rounded : Icons.image_rounded,
-          size: 20,
-          color: colorScheme.primary,
-        ),
-      ),
-      title: Text(
-        thought.displayTitle,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: theme.textTheme.titleMedium?.copyWith(fontSize: 14),
-      ),
-      subtitle: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+    final isDark = theme.brightness == Brightness.dark;
+    return Material(
+      color: Colors.transparent,
+      child: Container(
+        decoration: SynapseDecoration.card(dark: isDark),
+        child: ListTile(
+          tileColor: Colors.transparent,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+          leading: Container(
+            padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: colorScheme.primary.withValues(alpha: 0.08),
-              borderRadius: BorderRadius.circular(6),
+              color: SynapseColors.lavenderLight,
+              borderRadius: BorderRadius.circular(10),
             ),
-            child: Text(
-              '${thought.category.emoji} ${thought.category.label}',
-              style: TextStyle(fontSize: 11, color: colorScheme.primary),
+            child: Icon(
+              thought.type == ThoughtType.link ? Icons.link_rounded : Icons.image_rounded,
+              size: 20,
+              color: SynapseColors.accent,
             ),
           ),
-          const SizedBox(width: 8),
-          Text(
-            timeago.format(thought.createdAt),
-            style: theme.textTheme.bodySmall?.copyWith(fontSize: 11),
+          title: Text(
+            thought.displayTitle,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: theme.textTheme.titleMedium?.copyWith(fontSize: 14),
           ),
-        ],
-      ),
-      trailing: IconButton(
-        icon: Icon(
-          Icons.remove_circle_outline_rounded,
-          size: 20,
-          color: colorScheme.error.withValues(alpha: 0.6),
+          subtitle: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: colorScheme.primary.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(
+                  '${thought.category.emoji} ${thought.category.label}',
+                  style: TextStyle(fontSize: 11, color: colorScheme.primary),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                timeago.format(thought.createdAt),
+                style: theme.textTheme.bodySmall?.copyWith(fontSize: 11),
+              ),
+            ],
+          ),
+          trailing: IconButton(
+            icon: Icon(
+              Icons.remove_circle_outline_rounded,
+              size: 20,
+              color: colorScheme.error.withValues(alpha: 0.6),
+            ),
+            tooltip: 'Unwire from cluster',
+            onPressed: () async {
+              final provider = context.read<SynapseProvider>();
+              await provider.removeThoughtFromGroup(_group.id, thought.id);
+              _loadThoughts();
+            },
+          ),
+          onTap: () {
+            Navigator.push(
+              context,
+              SynapsePageRoute(
+                builder: (_) => ThoughtDetailScreen(item: thought),
+              ),
+            );
+          },
         ),
-        tooltip: 'Unwire from cluster',
-        onPressed: () async {
-          final provider = context.read<SynapseProvider>();
-          await provider.removeThoughtFromGroup(_group.id, thought.id);
-          _loadThoughts();
-        },
       ),
-      onTap: () {
-        Navigator.push(
-          context,
-          SynapsePageRoute(
-            builder: (_) => ThoughtDetailScreen(item: thought),
-          ),
-        );
-      },
     );
   }
 
