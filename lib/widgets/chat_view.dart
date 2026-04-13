@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
+import 'package:markdown/markdown.dart' as md;
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -20,6 +21,8 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
   final _controller = TextEditingController();
   final _scrollController = ScrollController();
   late AnimationController _shimmerCtrl;
+  bool _inputVisible = true;
+  double _lastScrollOffset = 0;
 
   @override
   void initState() {
@@ -28,15 +31,38 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
       vsync: this,
       duration: const Duration(milliseconds: 3000),
     )..repeat();
+    _scrollController.addListener(_onScroll);
+    _controller.addListener(_onTextChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
   }
 
   @override
   void dispose() {
+    _scrollController.removeListener(_onScroll);
+    _controller.removeListener(_onTextChanged);
     _shimmerCtrl.dispose();
     _controller.dispose();
     _scrollController.dispose();
     super.dispose();
+  }
+
+  void _onTextChanged() {
+    if (_controller.text.isNotEmpty && !_inputVisible) {
+      setState(() => _inputVisible = true);
+    }
+  }
+
+  void _onScroll() {
+    if (!_scrollController.hasClients) return;
+    final current = _scrollController.offset;
+    final delta = current - _lastScrollOffset;
+    _lastScrollOffset = current;
+
+    if (delta < -6 && _inputVisible) {
+      setState(() => _inputVisible = false);
+    } else if (delta > 6 && !_inputVisible) {
+      setState(() => _inputVisible = true);
+    }
   }
 
   @override
@@ -89,7 +115,21 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
                         left: 0,
                         right: 0,
                         bottom: 0,
-                        child: _buildInput(isDark, provider),
+                        child: AnimatedSlide(
+                          offset: _inputVisible
+                              ? Offset.zero
+                              : const Offset(0, 0.35),
+                          duration: const Duration(milliseconds: 250),
+                          curve: Curves.easeOutCubic,
+                          child: AnimatedOpacity(
+                            opacity: _inputVisible ? 1.0 : 0.0,
+                            duration: const Duration(milliseconds: 200),
+                            child: IgnorePointer(
+                              ignoring: !_inputVisible,
+                              child: _buildInput(isDark, provider),
+                            ),
+                          ),
+                        ),
                       ),
                     ],
                   ),
@@ -368,6 +408,7 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
     return MarkdownBody(
       data: text,
       selectable: true,
+      extensionSet: md.ExtensionSet.gitHubWeb,
       onTapLink: (_, href, __) {
         if (href != null) launchUrl(Uri.parse(href));
       },
@@ -426,16 +467,38 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
         ),
         tableBorder: TableBorder.all(
           color: isDark
-              ? Colors.white.withValues(alpha: 0.08)
-              : SynapseColors.ink.withValues(alpha: 0.08),
+              ? Colors.white.withValues(alpha: 0.12)
+              : SynapseColors.ink.withValues(alpha: 0.12),
           width: 0.5,
+          borderRadius: BorderRadius.circular(8),
         ),
         tableHead: GoogleFonts.spaceGrotesk(
-          fontWeight: FontWeight.w600,
-          fontSize: 12,
+          fontWeight: FontWeight.w700,
+          fontSize: 12.5,
           color: ink,
         ),
+        tableHeadAlign: TextAlign.left,
         tableBody: GoogleFonts.spaceGrotesk(fontSize: 12, color: ink),
+        tableCellsPadding: const EdgeInsets.symmetric(
+          horizontal: 10,
+          vertical: 7,
+        ),
+        tableColumnWidth: const FlexColumnWidth(),
+        horizontalRuleDecoration: BoxDecoration(
+          border: Border(
+            top: BorderSide(
+              color: isDark
+                  ? Colors.white.withValues(alpha: 0.10)
+                  : SynapseColors.ink.withValues(alpha: 0.10),
+              width: 1,
+            ),
+          ),
+        ),
+        h4: GoogleFonts.spaceGrotesk(
+          fontSize: 14,
+          fontWeight: FontWeight.w600,
+          color: ink,
+        ),
       ),
     );
   }
@@ -617,6 +680,7 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
     final text = _controller.text.trim();
     if (text.isEmpty) return;
     _controller.clear();
+    setState(() => _inputVisible = true);
     _scrollToBottom();
     await provider.sendChatMessage(text);
     _scrollToBottom();
@@ -630,6 +694,7 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
           duration: const Duration(milliseconds: 300),
           curve: Curves.easeOut,
         );
+        setState(() => _inputVisible = true);
       }
     });
   }
