@@ -248,6 +248,8 @@ class _LibraryViewState extends State<LibraryView> {
       slivers: [
         if (!_isSearching && !_isSelecting && provider.totalItemCount > 0)
           _buildActionStrip(isDark, provider),
+        if (!_isSearching && !_isSelecting && provider.totalItemCount > 0)
+          const SliverToBoxAdapter(child: SizedBox(height: 10)),
         if (!_isSearching && !_isSelecting)
           _buildFilterRow(isDark, provider),
         if (provider.items.isEmpty && provider.isFilterActive)
@@ -536,7 +538,9 @@ class _LibraryViewState extends State<LibraryView> {
                 height: 16,
                 margin: const EdgeInsets.symmetric(
                     horizontal: 6, vertical: 12),
-                color: SynapseColors.ink.withValues(alpha: 0.06),
+                color: isDark
+                    ? Colors.white.withValues(alpha: 0.08)
+                    : SynapseColors.ink.withValues(alpha: 0.06),
               ),
               ...provider.groups.map((g) {
                 final isSelected = provider.selectedGroup?.id == g.id;
@@ -560,14 +564,21 @@ class _LibraryViewState extends State<LibraryView> {
                 padding: const EdgeInsets.symmetric(horizontal: 12),
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
-                  color: SynapseColors.ink.withValues(alpha: 0.03),
+                  color: isDark
+                      ? Colors.white.withValues(alpha: 0.06)
+                      : SynapseColors.ink.withValues(alpha: 0.03),
                   borderRadius: BorderRadius.circular(100),
                   border: Border.all(
-                    color: SynapseColors.ink.withValues(alpha: 0.06),
+                    color: isDark
+                        ? Colors.white.withValues(alpha: 0.08)
+                        : SynapseColors.ink.withValues(alpha: 0.06),
                   ),
                 ),
                 child: Icon(Icons.add_rounded,
-                    size: 14, color: SynapseColors.inkFaint),
+                    size: 14,
+                    color: isDark
+                        ? SynapseColors.darkInkMuted
+                        : SynapseColors.inkFaint),
               ),
             ),
           ],
@@ -582,6 +593,19 @@ class _LibraryViewState extends State<LibraryView> {
     required VoidCallback onTap,
     VoidCallback? onLongPress,
   }) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final selectedBg = isDark
+        ? SynapseColors.accent.withValues(alpha: 0.25)
+        : SynapseColors.accent.withValues(alpha: 0.12);
+    final unselectedBg = isDark
+        ? Colors.white.withValues(alpha: 0.06)
+        : Colors.white.withValues(alpha: 0.7);
+    final selectedText = isDark ? SynapseColors.darkAccent : SynapseColors.accent;
+    final unselectedText = isDark ? SynapseColors.darkInkMuted : SynapseColors.inkMuted;
+    final borderColor = isDark
+        ? Colors.white.withValues(alpha: 0.08)
+        : SynapseColors.ink.withValues(alpha: 0.06);
+
     return Padding(
       padding: const EdgeInsets.only(right: 6),
       child: GestureDetector(
@@ -591,20 +615,20 @@ class _LibraryViewState extends State<LibraryView> {
           duration: const Duration(milliseconds: 200),
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           decoration: BoxDecoration(
-            color: isSelected ? SynapseColors.ink : Colors.white,
+            color: isSelected ? selectedBg : unselectedBg,
             borderRadius: BorderRadius.circular(100),
-            border: isSelected
-                ? null
-                : Border.all(
-                    color: SynapseColors.ink.withValues(alpha: 0.06),
-                  ),
+            border: Border.all(
+              color: isSelected
+                  ? SynapseColors.accent.withValues(alpha: isDark ? 0.4 : 0.2)
+                  : borderColor,
+            ),
           ),
           child: Text(
             label,
             style: GoogleFonts.spaceGrotesk(
               fontSize: 12,
               fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
-              color: isSelected ? Colors.white : SynapseColors.inkMuted,
+              color: isSelected ? selectedText : unselectedText,
             ),
           ),
         ),

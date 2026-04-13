@@ -73,7 +73,7 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
                                   16,
                                   8,
                                   16,
-                                  80,
+                                  148,
                                 ),
                                 itemCount:
                                     messages.length + (isLoading ? 1 : 0),
