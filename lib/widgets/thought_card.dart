@@ -25,9 +25,9 @@ class ThoughtCard extends StatelessWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     final card = Container(
-      decoration: SynapseDecoration.pastelCard(
-        category: thought.category,
-        dark: isDark,
+      decoration: BoxDecoration(
+        gradient: SynapseGradients.platformCard(thought.siteName, thought.url, dark: isDark),
+        borderRadius: BorderRadius.circular(20),
       ),
       clipBehavior: Clip.antiAlias,
       child: thought.type == ThoughtType.link

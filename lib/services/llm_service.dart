@@ -13,7 +13,7 @@ enum LlmProvider { gemini, openai }
 class LlmService {
   final _dbg = DebugLogger.instance;
 
-  static const _defaultModel = 'gemini-2.5-flash';
+  static const _defaultModel = 'gemini-3.1-flash-lite-preview';
 
   Future<String> _getGeminiUrl() async {
     final prefs = await SharedPreferences.getInstance();

@@ -324,6 +324,98 @@ class SynapseGradients {
           dark ? SynapseColors.darkCard : Colors.white,
         ],
       );
+
+  static LinearGradient platformCard(String? siteName, String? url, {bool dark = false}) {
+    final platform = _detectPlatform(siteName, url);
+    switch (platform) {
+      case 'instagram':
+        return LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: dark
+              ? [const Color(0xFF2D1535), const Color(0xFF1C1C2E)]
+              : [const Color(0xFFFCF0F8), const Color(0xFFF5EAFF)],
+        );
+      case 'linkedin':
+        return LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: dark
+              ? [const Color(0xFF0F1E30), const Color(0xFF1C1C2E)]
+              : [const Color(0xFFEDF4FC), const Color(0xFFE8F0FA)],
+        );
+      case 'twitter':
+        return LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: dark
+              ? [const Color(0xFF0F1820), const Color(0xFF1C1C2E)]
+              : [const Color(0xFFEDF7FF), const Color(0xFFE8F2FC)],
+        );
+      case 'youtube':
+        return LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: dark
+              ? [const Color(0xFF2D1515), const Color(0xFF1C1C2E)]
+              : [const Color(0xFFFFF0F0), const Color(0xFFFCECEC)],
+        );
+      case 'reddit':
+        return LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: dark
+              ? [const Color(0xFF2D1F0F), const Color(0xFF1C1C2E)]
+              : [const Color(0xFFFFF5EB), const Color(0xFFFCF0E5)],
+        );
+      case 'spotify':
+        return LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: dark
+              ? [const Color(0xFF0F2D18), const Color(0xFF1C1C2E)]
+              : [const Color(0xFFEDFCF0), const Color(0xFFE5F7EA)],
+        );
+      case 'pinterest':
+        return LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: dark
+              ? [const Color(0xFF2D1018), const Color(0xFF1C1C2E)]
+              : [const Color(0xFFFFF0F3), const Color(0xFFFCECF0)],
+        );
+      case 'github':
+        return LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: dark
+              ? [const Color(0xFF1A1A25), const Color(0xFF1C1C2E)]
+              : [const Color(0xFFF3F3F8), const Color(0xFFEEEEF5)],
+        );
+      default:
+        return LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: dark
+              ? [SynapseColors.darkLavender, SynapseColors.darkCard]
+              : [SynapseColors.lavenderLight, Colors.white],
+        );
+    }
+  }
+
+  static String _detectPlatform(String? siteName, String? url) {
+    final name = (siteName ?? '').toLowerCase();
+    final link = (url ?? '').toLowerCase();
+    if (name.contains('instagram') || link.contains('instagram.com')) return 'instagram';
+    if (name.contains('linkedin') || link.contains('linkedin.com')) return 'linkedin';
+    if (name.contains('twitter') || name.contains('x.com') || link.contains('twitter.com') || link.contains('x.com')) return 'twitter';
+    if (name.contains('youtube') || link.contains('youtube.com') || link.contains('youtu.be')) return 'youtube';
+    if (name.contains('reddit') || link.contains('reddit.com')) return 'reddit';
+    if (name.contains('spotify') || link.contains('spotify.com')) return 'spotify';
+    if (name.contains('pinterest') || link.contains('pinterest.com')) return 'pinterest';
+    if (name.contains('github') || link.contains('github.com')) return 'github';
+    return 'other';
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

@@ -400,6 +400,28 @@ class ShareHandlerService {
     return _handleSharedImage(filePath);
   }
 
+  Future<Thought?> refetchPreview(Thought thought) async {
+    if (thought.url == null || thought.url!.isEmpty) return null;
+    try {
+      final cleanUrl = url_utils.cleanInstagramUrl(thought.url!);
+      final preview = await _linkPreview.fetchPreview(cleanUrl);
+      if (preview == null) return null;
+
+      final updated = thought.copyWith(
+        previewImageUrl: preview.imageUrl,
+        siteName: preview.siteName ?? thought.siteName,
+        favicon: preview.favicon ?? thought.favicon,
+        title: thought.title ?? preview.title,
+        description: thought.description ?? preview.description,
+      );
+      await _db.insertThought(updated);
+      return updated;
+    } catch (e) {
+      _dbg.log('REFETCH', 'Failed for ${thought.url}: $e');
+      return null;
+    }
+  }
+
   bool _isUrl(String text) {
     final trimmed = text.trim();
     return Uri.tryParse(trimmed)?.hasScheme ?? false;

@@ -176,10 +176,27 @@ class _BottomNav extends StatelessWidget {
     );
   }
 
+  Color _pageAccentColor(int idx, bool isDark) {
+    switch (idx) {
+      case 0: // Cortex - lavender/purple
+        return isDark ? const Color(0xFFBF9EF7) : const Color(0xFF8B5BD8);
+      case 1: // Memories - lavender
+        return isDark ? const Color(0xFFBF9EF7) : const Color(0xFFA371F2);
+      case 2: // Recall - sky blue
+        return isDark ? const Color(0xFF64B5F6) : const Color(0xFF5B9BD5);
+      case 3: // Vault - coral/red
+        return isDark ? const Color(0xFFEF9A9A) : const Color(0xFFD32F2F);
+      case 4: // Settings - neutral lavender
+        return isDark ? const Color(0xFFBF9EF7) : const Color(0xFF8B5BD8);
+      default:
+        return isDark ? SynapseColors.darkInk : SynapseColors.ink;
+    }
+  }
+
   Widget _buildNavItem(int idx) {
     final item = _HomeScreenState._navItems[idx];
     final isActive = currentIndex == idx;
-    final activeColor = isDark ? SynapseColors.darkInk : SynapseColors.ink;
+    final activeColor = _pageAccentColor(idx, isDark);
     final inactiveColor =
         isDark ? SynapseColors.darkInkMuted : SynapseColors.inkFaint;
 

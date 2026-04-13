@@ -45,13 +45,16 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
 
     return Consumer<SynapseProvider>(
       builder: (context, provider, _) {
-        final messages =
-            provider.chatMessages.where((m) => !m.isSystem).toList();
+        final messages = provider.chatMessages
+            .where((m) => !m.isSystem)
+            .toList();
         final isLoading = provider.isChatLoading;
 
         return Container(
           decoration: BoxDecoration(
-            gradient: isDark ? SynapseGradients.chatBgDark : SynapseGradients.chatBg,
+            gradient: isDark
+                ? SynapseGradients.chatBgDark
+                : SynapseGradients.chatBg,
           ),
           child: SafeArea(
             bottom: false,
@@ -59,21 +62,38 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
               children: [
                 _buildHeader(isDark, messages.isNotEmpty),
                 Expanded(
-                  child: messages.isEmpty
-                      ? _buildEmptyChat(isDark, provider)
-                      : ListView.builder(
-                          controller: _scrollController,
-                          padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-                          itemCount: messages.length + (isLoading ? 1 : 0),
-                          itemBuilder: (context, index) {
-                            if (index == messages.length && isLoading) {
-                              return _buildTypingDots(isDark);
-                            }
-                            return _buildBubble(messages[index], isDark);
-                          },
-                        ),
+                  child: Stack(
+                    children: [
+                      Positioned.fill(
+                        child: messages.isEmpty
+                            ? _buildEmptyChat(isDark, provider)
+                            : ListView.builder(
+                                controller: _scrollController,
+                                padding: const EdgeInsets.fromLTRB(
+                                  16,
+                                  8,
+                                  16,
+                                  80,
+                                ),
+                                itemCount:
+                                    messages.length + (isLoading ? 1 : 0),
+                                itemBuilder: (context, index) {
+                                  if (index == messages.length && isLoading) {
+                                    return _buildTypingDots(isDark);
+                                  }
+                                  return _buildBubble(messages[index], isDark);
+                                },
+                              ),
+                      ),
+                      Positioned(
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        child: _buildInput(isDark, provider),
+                      ),
+                    ],
+                  ),
                 ),
-                _buildInput(isDark, provider),
               ],
             ),
           ),
@@ -128,8 +148,11 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
                   color: SynapseColors.ink.withValues(alpha: 0.04),
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: Icon(Icons.delete_sweep_outlined,
-                    size: 18, color: SynapseColors.inkFaint),
+                child: Icon(
+                  Icons.delete_sweep_outlined,
+                  size: 18,
+                  color: SynapseColors.inkFaint,
+                ),
               ),
             ),
         ],
@@ -167,11 +190,18 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
                   width: 52,
                   height: 52,
                   decoration: BoxDecoration(
-                    color: isDark ? SynapseColors.darkLavender : SynapseColors.lavenderLight,
+                    color: isDark
+                        ? SynapseColors.darkLavender
+                        : SynapseColors.lavenderLight,
                     borderRadius: BorderRadius.circular(18),
                   ),
-                  child: Icon(Icons.auto_awesome_rounded,
-                      color: isDark ? SynapseColors.darkAccent : SynapseColors.accent, size: 24),
+                  child: Icon(
+                    Icons.auto_awesome_rounded,
+                    color: isDark
+                        ? SynapseColors.darkAccent
+                        : SynapseColors.accent,
+                    size: 24,
+                  ),
                 ),
               ),
             ),
@@ -200,7 +230,9 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
               spacing: 8,
               runSpacing: 8,
               alignment: WrapAlignment.center,
-              children: suggestions.map((s) => _suggestionChip(s, provider)).toList(),
+              children: suggestions
+                  .map((s) => _suggestionChip(s, provider))
+                  .toList(),
             ),
           ],
         ),
@@ -221,7 +253,9 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
           color: isDark ? SynapseColors.darkCard : Colors.white,
           borderRadius: BorderRadius.circular(100),
           border: Border.all(
-            color: (isDark ? Colors.white : Colors.black).withValues(alpha: 0.06),
+            color: (isDark ? Colors.white : Colors.black).withValues(
+              alpha: 0.06,
+            ),
           ),
         ),
         child: Text(
@@ -242,8 +276,9 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
       child: Row(
-        mainAxisAlignment:
-            isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
+        mainAxisAlignment: isUser
+            ? MainAxisAlignment.end
+            : MainAxisAlignment.start,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (!isUser) ...[
@@ -252,11 +287,16 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
               height: 30,
               margin: const EdgeInsets.only(top: 4, right: 10),
               decoration: BoxDecoration(
-                color: isDark ? SynapseColors.darkLavender : SynapseColors.lavenderLight,
+                color: isDark
+                    ? SynapseColors.darkLavender
+                    : SynapseColors.lavenderLight,
                 borderRadius: BorderRadius.circular(10),
               ),
-              child: Icon(Icons.auto_awesome_rounded,
-                  size: 14, color: isDark ? SynapseColors.darkAccent : SynapseColors.accent),
+              child: Icon(
+                Icons.auto_awesome_rounded,
+                size: 14,
+                color: isDark ? SynapseColors.darkAccent : SynapseColors.accent,
+              ),
             ),
           ],
           Flexible(
@@ -268,14 +308,8 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
                         colors: isDark
-                            ? const [
-                                Color(0xFFBF9EF7),
-                                Color(0xFF9B70E0),
-                              ]
-                            : const [
-                                Color(0xFFA371F2),
-                                Color(0xFF8B5BD8),
-                              ],
+                            ? const [Color(0xFFBF9EF7), Color(0xFF9B70E0)]
+                            : const [Color(0xFFA371F2), Color(0xFF8B5BD8)],
                       ),
                       borderRadius: const BorderRadius.only(
                         topLeft: Radius.circular(22),
@@ -326,10 +360,25 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
       },
       styleSheet: MarkdownStyleSheet(
         p: GoogleFonts.spaceGrotesk(fontSize: 14, height: 1.5, color: ink),
-        h1: GoogleFonts.spaceGrotesk(fontSize: 18, fontWeight: FontWeight.w700, color: ink),
-        h2: GoogleFonts.spaceGrotesk(fontSize: 16, fontWeight: FontWeight.w700, color: ink),
-        h3: GoogleFonts.spaceGrotesk(fontSize: 15, fontWeight: FontWeight.w600, color: ink),
-        strong: GoogleFonts.spaceGrotesk(fontWeight: FontWeight.w600, color: ink),
+        h1: GoogleFonts.spaceGrotesk(
+          fontSize: 18,
+          fontWeight: FontWeight.w700,
+          color: ink,
+        ),
+        h2: GoogleFonts.spaceGrotesk(
+          fontSize: 16,
+          fontWeight: FontWeight.w700,
+          color: ink,
+        ),
+        h3: GoogleFonts.spaceGrotesk(
+          fontSize: 15,
+          fontWeight: FontWeight.w600,
+          color: ink,
+        ),
+        strong: GoogleFonts.spaceGrotesk(
+          fontWeight: FontWeight.w600,
+          color: ink,
+        ),
         em: GoogleFonts.spaceGrotesk(fontStyle: FontStyle.italic, color: ink),
         listBullet: GoogleFonts.spaceGrotesk(fontSize: 14, color: ink),
         code: GoogleFonts.jetBrainsMono(
@@ -354,7 +403,10 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
             ),
           ),
         ),
-        blockquotePadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+        blockquotePadding: const EdgeInsets.symmetric(
+          horizontal: 12,
+          vertical: 4,
+        ),
         a: GoogleFonts.spaceGrotesk(
           color: SynapseColors.accent,
           decoration: TextDecoration.underline,
@@ -365,7 +417,11 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
               : SynapseColors.ink.withValues(alpha: 0.08),
           width: 0.5,
         ),
-        tableHead: GoogleFonts.spaceGrotesk(fontWeight: FontWeight.w600, fontSize: 12, color: ink),
+        tableHead: GoogleFonts.spaceGrotesk(
+          fontWeight: FontWeight.w600,
+          fontSize: 12,
+          color: ink,
+        ),
         tableBody: GoogleFonts.spaceGrotesk(fontSize: 12, color: ink),
       ),
     );
@@ -381,7 +437,9 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
             height: 30,
             margin: const EdgeInsets.only(right: 10),
             decoration: BoxDecoration(
-              color: isDark ? SynapseColors.darkLavender : SynapseColors.lavenderLight,
+              color: isDark
+                  ? SynapseColors.darkLavender
+                  : SynapseColors.lavenderLight,
               borderRadius: BorderRadius.circular(10),
               boxShadow: [
                 BoxShadow(
@@ -391,8 +449,11 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
                 ),
               ],
             ),
-            child: Icon(Icons.auto_awesome_rounded,
-                size: 14, color: isDark ? SynapseColors.darkAccent : SynapseColors.accent),
+            child: Icon(
+              Icons.auto_awesome_rounded,
+              size: 14,
+              color: isDark ? SynapseColors.darkAccent : SynapseColors.accent,
+            ),
           ),
           AnimatedBuilder(
             animation: _shimmerCtrl,
@@ -452,37 +513,40 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
 
   Widget _buildInput(bool isDark, SynapseProvider provider) {
     final bottomPad = MediaQuery.of(context).padding.bottom;
-    return Container(
-      margin: EdgeInsets.fromLTRB(12, 4, 12, bottomPad + 56),
-      decoration: BoxDecoration(
-        color: isDark
-            ? SynapseColors.darkCard.withValues(alpha: 0.9)
-            : Colors.white.withValues(alpha: 0.9),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: (isDark ? Colors.white : Colors.black).withValues(alpha: 0.06),
-        ),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: TextField(
-              controller: _controller,
-              decoration: InputDecoration(
-                hintText: 'Ask about your memories...',
-                border: InputBorder.none,
-                enabledBorder: InputBorder.none,
-                focusedBorder: InputBorder.none,
-                filled: false,
-                contentPadding:
-                    const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-              ),
-              textInputAction: TextInputAction.send,
-              onSubmitted: (_) => _send(provider),
-              maxLines: 3,
-              minLines: 1,
-            ),
+    return Padding(
+      padding: EdgeInsets.fromLTRB(12, 4, 12, bottomPad + 12),
+      child: Container(
+        decoration: BoxDecoration(
+          color: isDark
+              ? SynapseColors.darkCard.withValues(alpha: 0.92)
+              : Colors.white.withValues(alpha: 0.92),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: (isDark ? Colors.white : Colors.black).withValues(alpha: 0.06),
           ),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: TextField(
+                controller: _controller,
+                decoration: InputDecoration(
+                  hintText: 'Ask about your memories...',
+                  border: InputBorder.none,
+                  enabledBorder: InputBorder.none,
+                  focusedBorder: InputBorder.none,
+                  filled: false,
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 14,
+                  ),
+                ),
+                textInputAction: TextInputAction.send,
+                onSubmitted: (_) => _send(provider),
+                maxLines: 3,
+                minLines: 1,
+              ),
+            ),
           Padding(
             padding: const EdgeInsets.only(right: 6),
             child: GestureDetector(
@@ -490,9 +554,11 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
               child: AnimatedBuilder(
                 animation: _shimmerCtrl,
                 builder: (context, _) {
-                  final pulse = (0.5 +
+                  final pulse =
+                      (0.5 +
                           0.5 *
-                              math.sin(_shimmerCtrl.value * 2 * math.pi)
+                              math
+                                  .sin(_shimmerCtrl.value * 2 * math.pi)
                                   .abs()) *
                       0.3;
                   return Container(
@@ -503,7 +569,10 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
                         colors: isDark
-                            ? [SynapseColors.darkAccent, const Color(0xFF9B70E0)]
+                            ? [
+                                SynapseColors.darkAccent,
+                                const Color(0xFF9B70E0),
+                              ]
                             : [SynapseColors.accent, SynapseColors.accentDark],
                       ),
                       borderRadius: BorderRadius.circular(14),
@@ -515,14 +584,18 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
                         ),
                       ],
                     ),
-                    child: Icon(Icons.arrow_upward_rounded,
-                        color: isDark ? Colors.black : Colors.white, size: 20),
+                    child: Icon(
+                      Icons.arrow_upward_rounded,
+                      color: isDark ? Colors.black : Colors.white,
+                      size: 20,
+                    ),
                   );
                 },
               ),
             ),
           ),
-        ],
+          ],
+        ),
       ),
     );
   }

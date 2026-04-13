@@ -38,6 +38,7 @@ class _ThoughtDetailScreenState extends State<ThoughtDetailScreen>
   bool _isClassifying = false;
   bool _descriptionExpanded = false;
   bool _markdownExpanded = false;
+  final Map<String, Color> _dominantColors = {};
   static const _descriptionPreviewLength = 150;
   static const _markdownPreviewLength = 200;
 
@@ -49,7 +50,7 @@ class _ThoughtDetailScreenState extends State<ThoughtDetailScreen>
     super.initState();
     _wireShimmer = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 2000),
+      duration: const Duration(milliseconds: 3000),
     )..repeat();
     _allItems = widget.allItems ?? [widget.item];
     _currentIndex = widget.initialIndex ??
@@ -135,10 +136,27 @@ class _ThoughtDetailScreenState extends State<ThoughtDetailScreen>
     );
   }
 
+  Future<void> _extractDominantColor(Thought item) async {
+    if (item.previewImageUrl == null || item.previewImageUrl!.isEmpty) return;
+    if (_dominantColors.containsKey(item.id)) return;
+    try {
+      final provider = CachedNetworkImageProvider(item.previewImageUrl!);
+      final scheme = await ColorScheme.fromImageProvider(provider: provider);
+      if (mounted) {
+        setState(() {
+          _dominantColors[item.id] = scheme.primary;
+        });
+      }
+    } catch (_) {}
+  }
+
   Widget _buildThoughtPage(Thought item) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
+
+    _extractDominantColor(item);
+    final dominantColor = _dominantColors[item.id];
 
     return Container(
       width: double.infinity,
@@ -147,9 +165,15 @@ class _ThoughtDetailScreenState extends State<ThoughtDetailScreen>
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
           colors: isDark
-              ? [const Color(0xFF0E0A18), const Color(0xFF000000)]
-              : [const Color(0xFFF3EDFF), Colors.white],
-          stops: const [0.0, 0.4],
+              ? [
+                  dominantColor?.withValues(alpha: 0.15) ?? const Color(0xFF0E0A18),
+                  const Color(0xFF000000),
+                ]
+              : [
+                  dominantColor?.withValues(alpha: 0.08) ?? const Color(0xFFF3EDFF),
+                  Colors.white,
+                ],
+          stops: const [0.0, 0.5],
         ),
       ),
       child: CustomScrollView(
@@ -198,7 +222,7 @@ class _ThoughtDetailScreenState extends State<ThoughtDetailScreen>
                   const SizedBox(height: 16),
                   _buildMarkdownSection(item.llmSummary!, theme, colorScheme),
                 ],
-                const SizedBox(height: 16),
+                const SizedBox(height: 20),
                 _buildTagsSection(item, theme, colorScheme),
                 if (item.isLinkDead) ...[
                   const SizedBox(height: 16),
@@ -238,7 +262,7 @@ class _ThoughtDetailScreenState extends State<ThoughtDetailScreen>
                     ),
                   ),
                 ],
-                const SizedBox(height: 24),
+                const SizedBox(height: 40),
                 _buildActions(item),
                 const SizedBox(height: 40),
               ],
@@ -723,63 +747,77 @@ class _ThoughtDetailScreenState extends State<ThoughtDetailScreen>
 
   Widget _buildTagsSection(Thought item, ThemeData theme, ColorScheme colorScheme) {
     final isDark = theme.brightness == Brightness.dark;
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: isDark
-              ? [SynapseColors.darkCard, SynapseColors.darkElevated]
-              : [Colors.white, const Color(0xFFF5F0FF)],
-        ),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: (isDark ? Colors.white : SynapseColors.accent).withValues(alpha: 0.08),
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(Icons.tag_rounded, size: 20, color: colorScheme.primary),
-              const SizedBox(width: 8),
-              Text(
-                'Tags',
-                style: theme.textTheme.titleSmall?.copyWith(
-                  color: colorScheme.primary,
-                  fontWeight: FontWeight.w600,
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        ...item.tags.map((tag) {
+          return Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            decoration: BoxDecoration(
+              color: isDark
+                  ? SynapseColors.accent.withValues(alpha: 0.1)
+                  : SynapseColors.accent.withValues(alpha: 0.06),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  '#$tag',
+                  style: GoogleFonts.spaceGrotesk(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                    color: isDark ? SynapseColors.darkAccent : SynapseColors.accentDark,
+                  ),
                 ),
+                const SizedBox(width: 6),
+                GestureDetector(
+                  onTap: () async {
+                    final provider = context.read<SynapseProvider>();
+                    await provider.removeTagFromThought(item.id, tag);
+                    _refreshCurrentItem(provider, item.id);
+                  },
+                  child: Icon(
+                    Icons.close_rounded,
+                    size: 14,
+                    color: (isDark ? SynapseColors.darkInkMuted : SynapseColors.inkMuted),
+                  ),
+                ),
+              ],
+            ),
+          );
+        }),
+        GestureDetector(
+          onTap: () => _showAddTagSheet(item),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: isDark
+                    ? SynapseColors.darkInkMuted.withValues(alpha: 0.3)
+                    : SynapseColors.inkFaint.withValues(alpha: 0.6),
               ),
-            ],
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.add_rounded, size: 14, color: isDark ? SynapseColors.darkInkMuted : SynapseColors.inkMuted),
+                const SizedBox(width: 4),
+                Text(
+                  'Add tag',
+                  style: GoogleFonts.spaceGrotesk(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                    color: isDark ? SynapseColors.darkInkMuted : SynapseColors.inkMuted,
+                  ),
+                ),
+              ],
+            ),
           ),
-          const SizedBox(height: 10),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              ...item.tags.map((tag) => Chip(
-                label: Text('#$tag'),
-                visualDensity: VisualDensity.compact,
-                deleteIcon: Icon(Icons.close_rounded, size: 16, color: colorScheme.error),
-                onDeleted: () async {
-                  final provider = context.read<SynapseProvider>();
-                  await provider.removeTagFromThought(item.id, tag);
-                  _refreshCurrentItem(provider, item.id);
-                },
-              )),
-              ActionChip(
-                avatar: Icon(Icons.add_rounded, size: 16, color: colorScheme.primary),
-                label: Text('+ Signal', style: TextStyle(color: colorScheme.primary, fontSize: 12)),
-                visualDensity: VisualDensity.compact,
-                onPressed: () => _showAddTagSheet(item),
-              ),
-            ],
-          ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
@@ -884,32 +922,63 @@ class _ThoughtDetailScreenState extends State<ThoughtDetailScreen>
   }
 
   Widget _buildInfoChips(Thought item, ThemeData theme, ColorScheme colorScheme) {
+    final isDark = theme.brightness == Brightness.dark;
     return Wrap(
       spacing: 8,
       runSpacing: 8,
       children: [
-        Chip(
-          avatar: Icon(
-            item.type == ThoughtType.link ? Icons.link_rounded : Icons.image_rounded,
-            size: 18,
-            color: colorScheme.primary,
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+          decoration: BoxDecoration(
+            color: isDark ? SynapseColors.darkLavender : SynapseColors.lavenderLight,
+            borderRadius: BorderRadius.circular(20),
           ),
-          label: Text(
-            item.type == ThoughtType.link ? 'Link' : 'Screenshot',
-            style: theme.textTheme.bodySmall,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                item.type == ThoughtType.link ? Icons.link_rounded : Icons.image_rounded,
+                size: 14,
+                color: colorScheme.primary,
+              ),
+              const SizedBox(width: 4),
+              Text(
+                item.type == ThoughtType.link ? 'Link' : 'Screenshot',
+                style: GoogleFonts.spaceGrotesk(fontSize: 11, fontWeight: FontWeight.w500, color: isDark ? SynapseColors.darkInk : SynapseColors.ink),
+              ),
+            ],
           ),
-          visualDensity: VisualDensity.compact,
         ),
-        Chip(
-          avatar: Icon(Icons.schedule_rounded, size: 18, color: colorScheme.primary),
-          label: Text(timeago.format(item.createdAt), style: theme.textTheme.bodySmall),
-          visualDensity: VisualDensity.compact,
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+          decoration: BoxDecoration(
+            color: isDark ? SynapseColors.darkSky : SynapseColors.skyBlueLight,
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.schedule_rounded, size: 14, color: isDark ? const Color(0xFF64B5F6) : const Color(0xFF5B9BD5)),
+              const SizedBox(width: 4),
+              Text(timeago.format(item.createdAt), style: GoogleFonts.spaceGrotesk(fontSize: 11, fontWeight: FontWeight.w500, color: isDark ? SynapseColors.darkInk : SynapseColors.ink)),
+            ],
+          ),
         ),
         if (item.ocrText != null && item.ocrText!.isNotEmpty)
-          Chip(
-            avatar: Icon(Icons.text_snippet_rounded, size: 16, color: colorScheme.tertiary),
-            label: Text('OCR indexed', style: theme.textTheme.bodySmall),
-            visualDensity: VisualDensity.compact,
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            decoration: BoxDecoration(
+              color: isDark ? SynapseColors.darkMint : SynapseColors.mintLight,
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.text_snippet_rounded, size: 14, color: SynapseColors.success),
+                const SizedBox(width: 4),
+                Text('OCR indexed', style: GoogleFonts.spaceGrotesk(fontSize: 11, fontWeight: FontWeight.w500, color: isDark ? SynapseColors.darkInk : SynapseColors.ink)),
+              ],
+            ),
           ),
       ],
     );
@@ -927,18 +996,18 @@ class _ThoughtDetailScreenState extends State<ThoughtDetailScreen>
     final isDark = theme.brightness == Brightness.dark;
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: isDark
-              ? [SynapseColors.darkCard, SynapseColors.darkElevated]
-              : [Colors.white, const Color(0xFFF8F5FF)],
+              ? [const Color(0xFF1E1A2E), const Color(0xFF151020)]
+              : [const Color(0xFFF8F4FF), const Color(0xFFFFFFFF)],
         ),
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(20),
         border: Border.all(
-          color: (isDark ? Colors.white : SynapseColors.accent).withValues(alpha: 0.08),
+          color: color.withValues(alpha: isDark ? 0.12 : 0.1),
         ),
       ),
       child: Column(
@@ -946,18 +1015,27 @@ class _ThoughtDetailScreenState extends State<ThoughtDetailScreen>
         children: [
           Row(
             children: [
-              Icon(icon, size: 20, color: color),
-              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(icon, size: 16, color: color),
+              ),
+              const SizedBox(width: 10),
               Text(
                 title,
-                style: theme.textTheme.titleSmall?.copyWith(
+                style: GoogleFonts.spaceGrotesk(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
                   color: color,
-                  fontWeight: FontWeight.w600,
+                  letterSpacing: -0.2,
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 14),
           child,
         ],
       ),
@@ -1061,18 +1139,18 @@ class _ThoughtDetailScreenState extends State<ThoughtDetailScreen>
     final isDark = theme.brightness == Brightness.dark;
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: isDark
-              ? [SynapseColors.darkCard, const Color(0xFF1E1A2E)]
-              : [Colors.white, const Color(0xFFF0EAFC)],
+              ? [const Color(0xFF1A1530), const Color(0xFF120E20)]
+              : [const Color(0xFFF5F0FF), const Color(0xFFFFFFFF)],
         ),
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(20),
         border: Border.all(
-          color: (isDark ? Colors.white : SynapseColors.accent).withValues(alpha: 0.08),
+          color: SynapseColors.accent.withValues(alpha: isDark ? 0.15 : 0.1),
         ),
       ),
       child: Column(
@@ -1183,56 +1261,50 @@ class _ThoughtDetailScreenState extends State<ThoughtDetailScreen>
             child: _isClassifying
                 ? AnimatedBuilder(
                     animation: _wireShimmer,
-                    builder: (context, child) {
-                      final dx = _wireShimmer.value * 2 - 0.5;
-                      return Container(
-                        height: 48,
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment(dx - 0.5, 0),
-                            end: Alignment(dx + 0.5, 0),
-                            colors: const [
-                              Color(0xFF8B5BD8),
-                              Color(0xFFBF9EF7),
-                              Color(0xFFA371F2),
-                              Color(0xFF8B5BD8),
-                            ],
-                            stops: const [0.0, 0.35, 0.65, 1.0],
-                          ),
-                          borderRadius: BorderRadius.circular(14),
-                          boxShadow: [
-                            BoxShadow(
-                              color: SynapseColors.accent.withValues(alpha: 0.25),
-                              blurRadius: 12,
-                              spreadRadius: 1,
-                            ),
-                          ],
+                    builder: (context, _) {
+                      return CustomPaint(
+                        painter: _GlowBorderPainter(
+                          progress: _wireShimmer.value,
+                          isDark: isDark,
                         ),
-                        child: child,
+                        child: Container(
+                          height: 48,
+                          margin: const EdgeInsets.all(2),
+                          decoration: BoxDecoration(
+                            color: isDark
+                                ? const Color(0xFF1E1A2E)
+                                : const Color(0xFFF5F0FF),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              SizedBox(
+                                width: 14,
+                                height: 14,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 1.5,
+                                  color: isDark
+                                      ? SynapseColors.darkAccent
+                                      : SynapseColors.accentDark,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                'Wiring...',
+                                style: GoogleFonts.spaceGrotesk(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: isDark
+                                      ? SynapseColors.darkAccent
+                                      : SynapseColors.accentDark,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                       );
                     },
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Colors.white,
-                          ),
-                        ),
-                        const SizedBox(width: 6),
-                        Text(
-                          'Wiring...',
-                          style: GoogleFonts.spaceGrotesk(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.white,
-                          ),
-                        ),
-                      ],
-                    ),
                   )
                 : Container(
                     height: 48,
@@ -1588,4 +1660,71 @@ class _AddToGroupSheetState extends State<_AddToGroupSheet> {
       ),
     );
   }
+}
+
+class _GlowBorderPainter extends CustomPainter {
+  final double progress;
+  final bool isDark;
+  _GlowBorderPainter({required this.progress, required this.isDark});
+
+  static const _pi2 = 3.14159265 * 2;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rect = Offset.zero & size;
+    final rrect = RRect.fromRectAndRadius(rect, const Radius.circular(14));
+    final center = rect.center;
+    final side = size.width > size.height ? size.width : size.height;
+    final shaderRect = Rect.fromCenter(
+      center: center,
+      width: side,
+      height: side,
+    );
+
+    final colors = isDark
+        ? const [
+            Color(0xFF7B68C8),
+            Color(0xFF5C8FD6),
+            Color(0xFF68B8A8),
+            Color(0xFFC88BD8),
+            Color(0xFFD88888),
+            Color(0xFFC8A868),
+            Color(0xFF7B68C8),
+          ]
+        : const [
+            Color(0xFFB8A0E8),
+            Color(0xFF88B8E8),
+            Color(0xFF90D0C0),
+            Color(0xFFD8A8E8),
+            Color(0xFFE8A8A8),
+            Color(0xFFD8C098),
+            Color(0xFFB8A0E8),
+          ];
+
+    final gradient = SweepGradient(
+      center: Alignment.center,
+      colors: colors,
+      stops: const [0.0, 0.17, 0.33, 0.5, 0.67, 0.83, 1.0],
+      transform: GradientRotation(progress * _pi2),
+    );
+
+    final shader = gradient.createShader(shaderRect);
+
+    final glowPaint = Paint()
+      ..shader = shader
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 6
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
+
+    final borderPaint = Paint()
+      ..shader = shader
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.5;
+
+    canvas.drawRRect(rrect, glowPaint);
+    canvas.drawRRect(rrect, borderPaint);
+  }
+
+  @override
+  bool shouldRepaint(_GlowBorderPainter old) => old.progress != progress;
 }

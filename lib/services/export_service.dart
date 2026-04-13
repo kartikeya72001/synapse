@@ -17,6 +17,8 @@ class ExportService {
     'Is Link Dead',
     'Created At',
     'Updated At',
+    'Image Path',
+    'Preview Image URL',
   ];
 
   static String _escapeCsv(String? value) {
@@ -44,6 +46,8 @@ class ExportService {
       thought.isLinkDead ? 'Yes' : 'No',
       _escapeCsv(thought.createdAt.toIso8601String()),
       _escapeCsv(thought.updatedAt.toIso8601String()),
+      _escapeCsv(thought.imagePath),
+      _escapeCsv(thought.previewImageUrl),
     ].join(',');
   }
 
@@ -127,18 +131,14 @@ class ExportService {
   static Future<List<Thought>> importFromCsv(File file) async {
     try {
       final content = await file.readAsString();
-      final lines = content
-          .split('\n')
-          .map((l) => l.trim())
-          .where((l) => l.isNotEmpty)
-          .toList();
-      if (lines.length < 2) return [];
+      final rows = _parseFullCsv(content);
+      if (rows.length < 2) return [];
 
       final thoughts = <Thought>[];
       final uuid = Uuid();
 
-      for (var i = 1; i < lines.length; i++) {
-        final fields = _parseCsvLine(lines[i]);
+      for (var i = 1; i < rows.length; i++) {
+        final fields = rows[i];
         if (fields.length < 11) continue;
 
         final title = fields[0];
@@ -152,6 +152,8 @@ class ExportService {
         final isDeadStr = fields[8];
         final createdStr = fields[9];
         final updatedStr = fields[10];
+        final imagePath = fields.length > 11 ? fields[11] : '';
+        final previewImageUrl = fields.length > 12 ? fields[12] : '';
 
         final type = typeName == 'screenshot'
             ? ThoughtType.screenshot
@@ -194,6 +196,8 @@ class ExportService {
           createdAt: createdAt,
           updatedAt: updatedAt,
           isClassified: category != ThoughtCategory.other,
+          imagePath: imagePath.isNotEmpty ? imagePath : null,
+          previewImageUrl: previewImageUrl.isNotEmpty ? previewImageUrl : null,
         ));
       }
 
@@ -204,36 +208,66 @@ class ExportService {
     }
   }
 
-  static List<String> _parseCsvLine(String line) {
+  static List<List<String>> _parseFullCsv(String content) {
+    final rows = <List<String>>[];
     final fields = <String>[];
     var current = StringBuffer();
     var inQuotes = false;
+    var i = 0;
 
-    for (var i = 0; i < line.length; i++) {
-      final c = line[i];
+    while (i < content.length) {
+      final c = content[i];
       if (inQuotes) {
         if (c == '"') {
-          if (i + 1 < line.length && line[i + 1] == '"') {
+          if (i + 1 < content.length && content[i + 1] == '"') {
             current.write('"');
-            i++;
+            i += 2;
+            continue;
           } else {
             inQuotes = false;
+            i++;
+            continue;
           }
         } else {
           current.write(c);
+          i++;
+          continue;
         }
       } else {
         if (c == '"') {
           inQuotes = true;
+          i++;
+          continue;
         } else if (c == ',') {
           fields.add(current.toString());
           current = StringBuffer();
+          i++;
+          continue;
+        } else if (c == '\n' || c == '\r') {
+          fields.add(current.toString());
+          rows.add(List<String>.from(fields));
+          fields.clear();
+          current = StringBuffer();
+          if (c == '\r' && i + 1 < content.length && content[i + 1] == '\n') {
+            i += 2;
+          } else {
+            i++;
+          }
+          continue;
         } else {
           current.write(c);
+          i++;
+          continue;
         }
       }
     }
-    fields.add(current.toString());
-    return fields;
+
+    if (current.isNotEmpty || fields.isNotEmpty) {
+      fields.add(current.toString());
+      rows.add(List<String>.from(fields));
+    }
+
+    return rows;
   }
+
 }

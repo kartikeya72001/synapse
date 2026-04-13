@@ -274,7 +274,7 @@ class SynapseProvider extends ChangeNotifier {
     }
     _applyFilters();
     notifyListeners();
-    _vectorSearch.indexThought(thought);
+    await _vectorSearch.indexThought(thought);
   }
 
   Future<void> deleteThought(String id) async {

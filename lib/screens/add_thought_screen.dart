@@ -29,6 +29,7 @@ class _AddThoughtScreenState extends State<AddThoughtScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
     return Scaffold(
       appBar: AppBar(
         title: Text(
@@ -40,19 +41,24 @@ class _AddThoughtScreenState extends State<AddThoughtScreen> {
           ),
         ),
       ),
-      body: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            _buildTabSelector(context),
-            const SizedBox(height: 32),
-            Expanded(
-              child: _selectedTab == 0
-                  ? _buildLinkTab(theme, colorScheme)
-                  : _buildScreenshotTab(theme, colorScheme),
-            ),
-          ],
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: isDark ? SynapseGradients.libraryBgDark : SynapseGradients.libraryBg,
+        ),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _buildTabSelector(context),
+              const SizedBox(height: 32),
+              Expanded(
+                child: _selectedTab == 0
+                    ? _buildLinkTab(theme, colorScheme)
+                    : _buildScreenshotTab(theme, colorScheme),
+              ),
+            ],
+          ),
         ),
       ),
     );

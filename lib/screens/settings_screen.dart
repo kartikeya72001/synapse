@@ -11,6 +11,7 @@ import '../services/debug_logger.dart';
 import '../services/llm_service.dart';
 import '../services/share_handler_service.dart';
 import '../services/export_service.dart';
+import '../models/thought.dart' show Thought, ThoughtType;
 import '../utils/constants.dart';
 import '../theme/app_theme.dart';
 
@@ -33,15 +34,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _backgroundShare = false;
   bool _debugLog = false;
   bool _autoWire = true;
-  String _selectedModel = 'gemini-2.5-flash';
+  String _selectedModel = 'gemini-3.1-flash-lite-preview';
 
   static const List<int?> _autoDeletePresets = [null, 7, 15, 30, 90, 180, 365];
 
-  static const _modelOptions = [
+  static const _geminiModels = [
+    _ModelOption('gemini-3.1-flash-lite-preview', 'Gemini 3.1 Flash Lite', 'Very Low', 'Medium'),
+    _ModelOption('gemini-3.1-flash-preview', 'Gemini 3.1 Flash', 'Low', 'High'),
+    _ModelOption('gemini-3.1-pro-preview', 'Gemini 3.1 Pro', 'High', 'Very High'),
     _ModelOption('gemini-2.5-flash', 'Gemini 2.5 Flash', 'Low', 'High'),
     _ModelOption('gemini-2.5-pro', 'Gemini 2.5 Pro', 'Medium', 'Very High'),
-    _ModelOption('gemini-2.0-flash', 'Gemini 2.0 Flash', 'Low', 'Medium'),
-    _ModelOption('gemini-2.0-flash-lite', 'Gemini 2.0 Flash Lite', 'Very Low', 'Low'),
+  ];
+  static const _openaiModels = [
+    _ModelOption('gpt-4o-mini', 'GPT-4o Mini', 'Very Low', 'Medium'),
+    _ModelOption('gpt-4o', 'GPT-4o', 'Medium', 'High'),
+    _ModelOption('gpt-4.1-mini', 'GPT-4.1 Mini', 'Low', 'High'),
+    _ModelOption('gpt-4.1', 'GPT-4.1', 'Medium', 'Very High'),
+    _ModelOption('o4-mini', 'o4-mini', 'Medium', 'Very High'),
   ];
 
   @override
@@ -62,7 +71,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final bgShare = prefs.getBool(AppConstants.backgroundSharePref) ?? false;
     final dbgLog = prefs.getBool(AppConstants.debugLogPref) ?? false;
     final autoWire = prefs.getBool(AppConstants.autoWirePref) ?? true;
-    final selectedModel = prefs.getString(AppConstants.geminiModelPref) ?? 'gemini-2.5-flash';
+    final selectedModel = prefs.getString(AppConstants.geminiModelPref) ?? 'gemini-3.1-flash-lite-preview';
 
     if (!mounted) return;
 
@@ -420,53 +429,85 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Widget _buildBackgroundShareToggle(ThemeData theme, ColorScheme colorScheme, bool isDark) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.all(16),
       decoration: SynapseDecoration.card(dark: isDark),
-      child: SwitchListTile.adaptive(
-        contentPadding: EdgeInsets.zero,
-        title: Text('Process in background',
-            style: theme.textTheme.bodyMedium
-                ?.copyWith(fontWeight: FontWeight.w600)),
-        subtitle: Text(
-          'Save shared links without opening the app',
-          style: theme.textTheme.bodySmall?.copyWith(
-            color: colorScheme.onSurface.withValues(alpha: 0.5),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: isDark ? SynapseColors.darkLavender : SynapseColors.lavenderLight,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(Icons.sync_rounded, size: 20, color: SynapseColors.accent),
           ),
-        ),
-        value: _backgroundShare,
-        activeTrackColor: SynapseColors.accent,
-        activeThumbColor: Colors.white,
-        onChanged: (val) async {
-          setState(() => _backgroundShare = val);
-          final prefs = await SharedPreferences.getInstance();
-          await prefs.setBool(AppConstants.backgroundSharePref, val);
-        },
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Process in background', style: theme.textTheme.titleMedium),
+                const SizedBox(height: 2),
+                Text(
+                  'Save shared links without opening the app',
+                  style: theme.textTheme.bodySmall,
+                ),
+              ],
+            ),
+          ),
+          Switch.adaptive(
+            value: _backgroundShare,
+            activeThumbColor: SynapseColors.accent,
+            activeTrackColor: SynapseColors.accent.withValues(alpha: 0.4),
+            onChanged: (val) async {
+              setState(() => _backgroundShare = val);
+              final prefs = await SharedPreferences.getInstance();
+              await prefs.setBool(AppConstants.backgroundSharePref, val);
+            },
+          ),
+        ],
       ),
     );
   }
 
   Widget _buildDebugLogToggle(ThemeData theme, ColorScheme colorScheme, bool isDark) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.all(16),
       decoration: SynapseDecoration.card(dark: isDark),
-      child: SwitchListTile.adaptive(
-        contentPadding: EdgeInsets.zero,
-        title: Text('Debug logging',
-            style: theme.textTheme.bodyMedium
-                ?.copyWith(fontWeight: FontWeight.w600)),
-        subtitle: Text(
-          'Save detailed processing logs to Downloads',
-          style: theme.textTheme.bodySmall?.copyWith(
-            color: colorScheme.onSurface.withValues(alpha: 0.5),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: isDark ? SynapseColors.darkLavender : SynapseColors.lavenderLight,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(Icons.bug_report_rounded, size: 20, color: SynapseColors.accent),
           ),
-        ),
-        value: _debugLog,
-        activeTrackColor: SynapseColors.accent,
-        activeThumbColor: Colors.white,
-        onChanged: (val) async {
-          setState(() => _debugLog = val);
-          await DebugLogger.instance.setEnabled(val);
-        },
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Debug logging', style: theme.textTheme.titleMedium),
+                const SizedBox(height: 2),
+                Text(
+                  'Save detailed processing logs to Downloads',
+                  style: theme.textTheme.bodySmall,
+                ),
+              ],
+            ),
+          ),
+          Switch.adaptive(
+            value: _debugLog,
+            activeThumbColor: SynapseColors.accent,
+            activeTrackColor: SynapseColors.accent.withValues(alpha: 0.4),
+            onChanged: (val) async {
+              setState(() => _debugLog = val);
+              await DebugLogger.instance.setEnabled(val);
+            },
+          ),
+        ],
       ),
     );
   }
@@ -894,6 +935,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         imported++;
       }
       await provider.loadThoughts();
+      _refetchMissingPreviews(provider, thoughts);
 
       if (mounted) {
         Navigator.of(context).pop();
@@ -909,6 +951,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
           const SnackBar(content: Text('Import failed. Please try again.')),
         );
       }
+    }
+  }
+
+  void _refetchMissingPreviews(SynapseProvider provider, List<Thought> thoughts) {
+    final linksNeedingPreview = thoughts.where(
+      (t) => t.type == ThoughtType.link && t.url != null && t.url!.isNotEmpty && (t.previewImageUrl == null || t.previewImageUrl!.isEmpty),
+    ).toList();
+
+    if (linksNeedingPreview.isEmpty) return;
+
+    final shareHandler = ShareHandlerService();
+    for (final thought in linksNeedingPreview) {
+      shareHandler.refetchPreview(thought).then((updated) {
+        if (updated != null) {
+          provider.updateThought(updated);
+        }
+      }).catchError((_) {});
     }
   }
 
@@ -1053,7 +1112,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           Switch.adaptive(
             value: _autoWire,
-            activeColor: SynapseColors.accent,
+            activeThumbColor: SynapseColors.accent,
+            activeTrackColor: SynapseColors.accent.withValues(alpha: 0.4),
             onChanged: (val) async {
               setState(() => _autoWire = val);
               final prefs = await SharedPreferences.getInstance();
@@ -1068,7 +1128,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Widget _buildModelSelector(ThemeData theme, ColorScheme colorScheme, bool isDark) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
-      children: _modelOptions.map((model) {
+      children: (_selectedProvider == LlmProvider.gemini ? _geminiModels : _openaiModels).map((model) {
         final isSelected = _selectedModel == model.id;
         final costColor = switch (model.cost) {
           'Very Low' => SynapseColors.success,
@@ -1149,9 +1209,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       color: costColor.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(6),
                     ),
-                    child: Text(
-                      model.cost,
-                      style: GoogleFonts.spaceGrotesk(fontSize: 9, fontWeight: FontWeight.w600, color: costColor),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.payments_outlined, size: 10, color: costColor),
+                        const SizedBox(width: 3),
+                        Text(
+                          model.cost,
+                          style: GoogleFonts.spaceGrotesk(
+                            fontSize: 9,
+                            fontWeight: FontWeight.w600,
+                            color: costColor,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                   const SizedBox(width: 6),
@@ -1161,9 +1232,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       color: qualityColor.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(6),
                     ),
-                    child: Text(
-                      model.quality,
-                      style: GoogleFonts.spaceGrotesk(fontSize: 9, fontWeight: FontWeight.w600, color: qualityColor),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.auto_awesome_rounded, size: 10, color: qualityColor),
+                        const SizedBox(width: 3),
+                        Text(
+                          model.quality,
+                          style: GoogleFonts.spaceGrotesk(
+                            fontSize: 9,
+                            fontWeight: FontWeight.w600,
+                            color: qualityColor,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],
