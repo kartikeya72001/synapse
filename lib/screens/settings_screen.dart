@@ -1068,7 +1068,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             child: Column(
               children: [
                 Text(
-                  'Version 2.0.0',
+                  'Version 1.3.0',
                   style: theme.textTheme.bodySmall,
                 ),
                 const SizedBox(height: 12),

@@ -1356,8 +1356,20 @@ class _ThoughtDetailScreenState extends State<ThoughtDetailScreen>
   }
 
   Future<void> _classify(Thought item) async {
-    setState(() => _isClassifying = true);
     final provider = context.read<SynapseProvider>();
+
+    if (provider.isWiringThought(item.id)) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('This synapse is already being wired in the background.'),
+          ),
+        );
+      }
+      return;
+    }
+
+    setState(() => _isClassifying = true);
     final success = await provider.classifyThought(item);
     if (mounted) {
       setState(() => _isClassifying = false);

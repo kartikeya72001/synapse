@@ -67,6 +67,9 @@ class SynapseProvider extends ChangeNotifier {
   // Auto-bundle suggestions
   final List<BundleSuggestion> _bundleSuggestions = [];
 
+  // Tracks thoughts currently being wired (to prevent concurrent classification)
+  final Set<String> _wiringInProgress = {};
+
   // Dead link state
   int _deadLinkCount = 0;
   bool _isCheckingDeadLinks = false;
@@ -308,11 +311,31 @@ class SynapseProvider extends ChangeNotifier {
 
   // ── Classification ──
 
+  bool isWiringThought(String id) => _wiringInProgress.contains(id);
+
   Future<bool> classifyThought(Thought thought) async {
-    final classified = await _classification.classify(thought);
-    if (classified == null) return false;
-    await updateThought(classified);
-    return true;
+    if (_wiringInProgress.contains(thought.id)) {
+      _dbg.log('WIRE', 'Already wiring "${thought.displayTitle}", skipping');
+      return false;
+    }
+    _wiringInProgress.add(thought.id);
+    notifyListeners();
+    try {
+      final classified = await _classification.classify(thought);
+      if (classified == null) {
+        _wiringInProgress.remove(thought.id);
+        notifyListeners();
+        return false;
+      }
+      await updateThought(classified);
+      return true;
+    } catch (e) {
+      _dbg.log('WIRE', 'Error wiring "${thought.displayTitle}": $e');
+      return false;
+    } finally {
+      _wiringInProgress.remove(thought.id);
+      notifyListeners();
+    }
   }
 
   void cancelClassification() {
