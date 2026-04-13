@@ -25,15 +25,32 @@ class VectorSearchService {
   /// Minimum cosine similarity to include from vector search.
   static const double minScore = 0.10;
 
+  Map<String, List<List<double>>>? _embeddingCache;
+  bool _cacheDirty = true;
+
   VectorSearchService({
     DatabaseService? db,
     EmbeddingService? embedding,
   })  : _db = db ?? DatabaseService(),
         _embedding = embedding ?? EmbeddingService();
 
+  void _invalidateCache() { _cacheDirty = true; }
+
+  Future<Map<String, List<List<double>>>> _getCachedEmbeddings() async {
+    if (_cacheDirty || _embeddingCache == null) {
+      _embeddingCache = await _db.getAllEmbeddings();
+      _cacheDirty = false;
+      int totalChunks = 0;
+      for (final v in _embeddingCache!.values) totalChunks += v.length;
+      _dbg.log('VEC', 'cache refreshed: ${_embeddingCache!.length} thoughts, '
+          '$totalChunks total chunks');
+    }
+    return _embeddingCache!;
+  }
+
   // ── Index a single thought ──
 
-  /// Computes and stores the embedding for a thought.
+  /// Computes and stores chunk-level embeddings for a thought.
   /// Skips if the text content hasn't changed (based on hash).
   Future<bool> indexThought(Thought thought) async {
     final text = EmbeddingService.thoughtToText(thought);
@@ -46,22 +63,38 @@ class VectorSearchService {
       return true;
     }
 
+    final chunks = EmbeddingService.chunkText(text);
     _dbg.log('VEC', 'indexing "${thought.displayTitle}" '
-        '(${text.length} chars)');
-    final vector = await _embedding.embedThought(thought);
-    if (vector == null) {
+        '(${text.length} chars, ${chunks.length} chunks)');
+
+    final vectors = <List<double>>[];
+    for (final chunk in chunks) {
+      final vector = await _embedding.embed(
+        chunk,
+        taskType: 'RETRIEVAL_DOCUMENT',
+        title: thought.title,
+      );
+      if (vector != null) {
+        vectors.add(vector);
+      }
+    }
+
+    if (vectors.isEmpty) {
       _dbg.log('VEC', 'embed failed for "${thought.displayTitle}"');
       return false;
     }
 
-    await _db.upsertEmbedding(thought.id, vector, hash);
-    _dbg.log('VEC', 'indexed "${thought.displayTitle}" OK');
+    await _db.upsertChunkEmbeddings(thought.id, vectors, hash);
+    _invalidateCache();
+    _dbg.log('VEC', 'indexed "${thought.displayTitle}" OK '
+        '(${vectors.length} chunks)');
     return true;
   }
 
   /// Removes the embedding for a deleted thought.
   Future<void> removeThought(String thoughtId) async {
     await _db.deleteEmbedding(thoughtId);
+    _invalidateCache();
   }
 
   // ── Batch indexing ──
@@ -101,21 +134,39 @@ class VectorSearchService {
     _dbg.log('VEC', 'need to index ${toEmbed.length}/'
         '${thoughts.length} thoughts');
 
-    // Batch embed for efficiency
-    final texts = toEmbed.map(EmbeddingService.thoughtToText).toList();
-    final vectors = await _embedding.batchEmbed(texts);
-
+    // Batch embed with chunking
     int indexed = 0;
-    for (var i = 0; i < toEmbed.length; i++) {
-      final vector = vectors[i];
-      if (vector == null) continue;
-      final hash = _textHash(texts[i]);
-      await _db.upsertEmbedding(toEmbed[i].id, vector, hash);
+    final allChunks = <String>[];
+    final chunkMeta = <({int thoughtIdx, int chunkIdx})>[];
+    for (int ti = 0; ti < toEmbed.length; ti++) {
+      final text = EmbeddingService.thoughtToText(toEmbed[ti]);
+      final chunks = EmbeddingService.chunkText(text);
+      for (int ci = 0; ci < chunks.length; ci++) {
+        allChunks.add(chunks[ci]);
+        chunkMeta.add((thoughtIdx: ti, chunkIdx: ci));
+      }
+    }
+
+    final vectors = await _embedding.batchEmbed(allChunks);
+
+    final thoughtVectors = <int, List<List<double>>>{};
+    for (int i = 0; i < chunkMeta.length; i++) {
+      final vec = vectors[i];
+      if (vec == null) continue;
+      thoughtVectors.putIfAbsent(chunkMeta[i].thoughtIdx, () => []).add(vec);
+    }
+
+    for (final entry in thoughtVectors.entries) {
+      final thought = toEmbed[entry.key];
+      final text = EmbeddingService.thoughtToText(thought);
+      final hash = _textHash(text);
+      await _db.upsertChunkEmbeddings(thought.id, entry.value, hash);
       indexed++;
     }
 
+    _invalidateCache();
     _dbg.log('VEC', 'batch indexing done — $indexed/${toEmbed.length} '
-        'thoughts embedded');
+        'thoughts embedded (${allChunks.length} total chunks)');
     return indexed;
   }
 
@@ -138,8 +189,8 @@ class VectorSearchService {
     }
     _dbg.log('VEC', 'query embedded in ${sw.elapsedMilliseconds}ms');
 
-    final storedEmbeddings = await _db.getAllEmbeddings();
-    _dbg.log('VEC', '${storedEmbeddings.length} stored embeddings');
+    final storedEmbeddings = await _getCachedEmbeddings();
+    _dbg.log('VEC', '${storedEmbeddings.length} thoughts in embedding store');
     if (storedEmbeddings.isEmpty) return [];
 
     final thoughtMap = {for (final t in allThoughts) t.id: t};
@@ -149,10 +200,14 @@ class VectorSearchService {
       final thought = thoughtMap[entry.key];
       if (thought == null) continue;
 
-      final score = EmbeddingService.cosineSimilarity(
-          queryVector, entry.value);
-      if (score >= minScore) {
-        scored.add(ScoredThought(thought, score));
+      // Use the best chunk score for this thought
+      double bestScore = 0.0;
+      for (final chunkVec in entry.value) {
+        final s = EmbeddingService.cosineSimilarity(queryVector, chunkVec);
+        if (s > bestScore) bestScore = s;
+      }
+      if (bestScore >= minScore) {
+        scored.add(ScoredThought(thought, bestScore));
       }
     }
 

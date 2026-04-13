@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/thought.dart';
+import '../models/chat_message.dart';
 import '../utils/constants.dart';
 import 'debug_logger.dart';
 
@@ -147,7 +148,11 @@ class LlmService {
 
   // ── Q&A ──
 
-  Future<String?> askQuestion(String question, List<Thought> contextItems) async {
+  Future<String?> askQuestion(
+    String question,
+    List<Thought> contextItems, {
+    List<ChatMessage>? chatHistory,
+  }) async {
     if (!await hasApiKey()) return null;
 
     _dbg.log('LLM', 'askQuestion with ${contextItems.length} context items');
@@ -174,6 +179,9 @@ class LlmService {
       return parts.join('\n');
     }).join('\n---\n');
 
+    // Build conversation history with sliding window
+    final historyStr = _buildConversationContext(chatHistory);
+
     final prompt = '''You are Synapse, a personal assistant that ONLY answers 
 from the user's saved memories provided below. You must NEVER use outside 
 knowledge, training data, or information from the internet.
@@ -189,13 +197,18 @@ STRICT RULES:
 5. Never mention "context", "saved items", "memories", or "knowledge base" — 
    just answer naturally as if you recall this from what the user shared.
 6. Use markdown formatting (headers, bullets, bold) when helpful.
+7. When multiple context items are relevant, COMPARE and SYNTHESIZE across 
+   them. Highlight similarities, differences, trade-offs, and complementary 
+   details — don't just list items individually.
+8. If the user asks to compare, rank, or choose between items, draw on all 
+   relevant context items and provide a reasoned analysis.
 
 IMPORTANT: Search through ALL context items carefully. Information may 
 appear in titles, descriptions, summaries, extracted details, or OCR text.
 Names, places, products, and specific details may be mentioned in any field.
 Match partial names and related terms — e.g. "herbivore cafe" should match 
 "Truly Herbivore Restaurant".
-
+${historyStr.isNotEmpty ? '\nCONVERSATION SO FAR:\n$historyStr\n' : ''}
 CONTEXT:
 $contextStr
 
@@ -203,6 +216,51 @@ QUESTION: $question''';
 
     final text = await _callLlmRaw(prompt);
     return text;
+  }
+
+  /// Builds a sliding window of recent conversation turns.
+  /// Keeps the last 10 messages verbatim, summarizes older ones as a recap.
+  String _buildConversationContext(List<ChatMessage>? history) {
+    if (history == null || history.length <= 1) return '';
+
+    // Filter to user/assistant messages only (skip system/welcome)
+    final relevant = history.where((m) =>
+        m.role == ChatMessageRole.user ||
+        m.role == ChatMessageRole.assistant).toList();
+    if (relevant.isEmpty) return '';
+
+    const recentWindow = 10;
+
+    if (relevant.length <= recentWindow) {
+      return relevant.map((m) {
+        final role = m.isUser ? 'User' : 'Assistant';
+        return '$role: ${m.text}';
+      }).join('\n');
+    }
+
+    // Summarize older messages, keep recent ones verbatim
+    final older = relevant.sublist(0, relevant.length - recentWindow);
+    final recent = relevant.sublist(relevant.length - recentWindow);
+
+    final olderTopics = <String>{};
+    for (final m in older) {
+      if (m.isUser) {
+        final words = m.text.split(' ').take(8).join(' ');
+        olderTopics.add(words);
+      }
+    }
+
+    final buf = StringBuffer();
+    if (olderTopics.isNotEmpty) {
+      buf.writeln('[Earlier in this conversation, the user asked about: '
+          '${olderTopics.join("; ")}]');
+      buf.writeln();
+    }
+    for (final m in recent) {
+      final role = m.isUser ? 'User' : 'Assistant';
+      buf.writeln('$role: ${m.text}');
+    }
+    return buf.toString();
   }
 
   // ── Video / Audio Transcription ──

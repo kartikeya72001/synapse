@@ -69,19 +69,37 @@ class SecretService {
 
   String _encrypt(String plainText) {
     final key = _getOrCreateKeySync();
-    final iv = _getOrCreateIVSync();
-    if (key == null || iv == null) return plainText;
+    if (key == null) return plainText;
 
+    final iv = enc.IV.fromSecureRandom(16);
     final encrypter = enc.Encrypter(enc.AES(key));
-    return encrypter.encrypt(plainText, iv: iv).base64;
+    final encrypted = encrypter.encrypt(plainText, iv: iv);
+    // Prepend IV (base64) with a separator so each secret has its own IV
+    return '${base64Encode(iv.bytes)}:${encrypted.base64}';
   }
 
   String _decrypt(String encrypted) {
     final key = _getOrCreateKeySync();
-    final iv = _getOrCreateIVSync();
-    if (key == null || iv == null) return encrypted;
+    if (key == null) return encrypted;
 
     final encrypter = enc.Encrypter(enc.AES(key));
+
+    // New format: "base64IV:base64Ciphertext"
+    if (encrypted.contains(':')) {
+      final parts = encrypted.split(':');
+      if (parts.length == 2) {
+        try {
+          final iv = enc.IV.fromBase64(parts[0]);
+          return encrypter.decrypt64(parts[1], iv: iv);
+        } catch (_) {
+          // Fall through to legacy decryption
+        }
+      }
+    }
+
+    // Legacy fallback: global IV for secrets encrypted before this change
+    final iv = _getOrCreateIVSync();
+    if (iv == null) return encrypted;
     return encrypter.decrypt64(encrypted, iv: iv);
   }
 

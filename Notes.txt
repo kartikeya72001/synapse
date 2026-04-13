@@ -1,4 +1,4 @@
-1. Local Vector DB (This we can also sync to remote)
+1. Local Vector DB (This we can also sync to remote) (done)
 2. Gemma for local processing
 3. Storing user data in google drive for extraction when app is uninstalled
 4. Own models for faster processing
@@ -7,4 +7,5 @@
 7. Instagram bot which can direct data to synapse app
 8. Do we want to increase dimensionality of Gemini-embedding-001 to 1536 or 3072 to extract more information from the textual data using `output_dimensionality`
 9. Check if the vault is searchable using the model, the vault should be absolutely local processing base, also, a memory should be transferrable to the vault.
-10. Add user analytics for furniture
+10. Add user analytics for user (done)
+11. Improved mark down functionality in the chat window

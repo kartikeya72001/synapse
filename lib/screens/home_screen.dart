@@ -43,56 +43,59 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    return Consumer<SynapseProvider>(
-      builder: (context, provider, _) {
-        _handlePendingShare(provider);
+    // Only rebuild HomeScreen when a new share arrives, not on every provider change
+    final hasPending = context.select<SynapseProvider, bool>(
+        (p) => p.pendingSharedThought != null);
+    if (hasPending) {
+      _handlePendingShare(context.read<SynapseProvider>());
+    }
 
-        return Scaffold(
-          extendBody: true,
-          body: IndexedStack(
-            index: _tab,
-            children: [
-              const ChatView(),
-              const LibraryView(),
-              const TimelineScreen(),
-              const PulseScreen(),
-              if (_vaultVisited)
-                const SecretsScreen()
-              else
-                const SizedBox.shrink(),
-              const SettingsScreen(),
-            ],
-          ),
-          bottomNavigationBar: _BottomNav(
-            currentIndex: _tab,
-            isDark: isDark,
-            onTabTap: _switchTab,
-          ),
-          floatingActionButton: _tab == 1
-              ? Container(
-                  decoration: BoxDecoration(
-                    color: SynapseColors.ink,
-                    borderRadius: BorderRadius.circular(18),
-                  ),
-                  child: FloatingActionButton(
-                    heroTag: 'add',
-                    backgroundColor: Colors.transparent,
-                    elevation: 0,
-                    onPressed: () async {
-                      final p = context.read<SynapseProvider>();
-                      await Navigator.push(
-                        context,
-                        SynapsePageRoute(
-                            builder: (_) => const AddThoughtScreen()),
-                      );
-                      if (mounted) p.loadThoughts();
-                    },
-                    child: const Icon(Icons.add_rounded, size: 26),
-                  ),
-                )
-              : null,
-        );
-      },
+    final pages = <Widget>[
+      const ChatView(),
+      const LibraryView(),
+      const TimelineScreen(),
+      const PulseScreen(),
+      if (_vaultVisited) const SecretsScreen() else const SizedBox.shrink(),
+      const SettingsScreen(),
+    ];
+
+    return Scaffold(
+      extendBody: true,
+      body: IndexedStack(
+        index: _tab,
+        children: [
+          for (int i = 0; i < pages.length; i++)
+            TickerMode(enabled: _tab == i, child: pages[i]),
+        ],
+      ),
+      bottomNavigationBar: _BottomNav(
+        currentIndex: _tab,
+        isDark: isDark,
+        onTabTap: _switchTab,
+      ),
+      floatingActionButton: _tab == 1
+          ? Container(
+              decoration: BoxDecoration(
+                color: SynapseColors.ink,
+                borderRadius: BorderRadius.circular(18),
+              ),
+              child: FloatingActionButton(
+                heroTag: 'add',
+                backgroundColor: Colors.transparent,
+                elevation: 0,
+                onPressed: () async {
+                  final p = context.read<SynapseProvider>();
+                  await Navigator.push(
+                    context,
+                    SynapsePageRoute(
+                        builder: (_) => const AddThoughtScreen()),
+                  );
+                  if (mounted) p.loadThoughts();
+                },
+                child: const Icon(Icons.add_rounded, size: 26),
+              ),
+            )
+          : null,
     );
   }
 

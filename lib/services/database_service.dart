@@ -20,7 +20,9 @@ class DatabaseService {
 
   static const String _createEmbeddingsTableSql = '''
     CREATE TABLE IF NOT EXISTS $_embeddingsTable (
-      thoughtId TEXT PRIMARY KEY,
+      id TEXT PRIMARY KEY,
+      thoughtId TEXT NOT NULL,
+      chunkIndex INTEGER NOT NULL DEFAULT 0,
       vector TEXT NOT NULL,
       textHash TEXT NOT NULL,
       createdAt TEXT NOT NULL,
@@ -44,7 +46,7 @@ class DatabaseService {
 
     return await openDatabase(
       path,
-      version: 6,
+      version: 7,
       onCreate: (db, version) async {
         await db.execute('''
           CREATE TABLE $_tableName (
@@ -144,6 +146,10 @@ class DatabaseService {
         }
         if (oldVersion < 6) {
           await db.delete(_embeddingsTable);
+        }
+        if (oldVersion < 7) {
+          await db.execute('DROP TABLE IF EXISTS $_embeddingsTable');
+          await db.execute(_createEmbeddingsTableSql);
         }
       },
     );
@@ -254,37 +260,42 @@ class DatabaseService {
     await db.delete(_chatTable);
   }
 
-  // ── Embeddings ──
+  // ── Embeddings (chunk-level) ──
 
-  Future<void> upsertEmbedding(
+  Future<void> upsertChunkEmbeddings(
     String thoughtId,
-    List<double> vector,
+    List<List<double>> vectors,
     String textHash,
   ) async {
     final db = await database;
-    await db.insert(
-      _embeddingsTable,
-      {
+    await db.delete(_embeddingsTable,
+        where: 'thoughtId = ?', whereArgs: [thoughtId]);
+    final now = DateTime.now().toIso8601String();
+    for (int i = 0; i < vectors.length; i++) {
+      await db.insert(_embeddingsTable, {
+        'id': '${thoughtId}_$i',
         'thoughtId': thoughtId,
-        'vector': jsonEncode(vector),
+        'chunkIndex': i,
+        'vector': jsonEncode(vectors[i]),
         'textHash': textHash,
-        'createdAt': DateTime.now().toIso8601String(),
-      },
-      conflictAlgorithm: ConflictAlgorithm.replace,
-    );
+        'createdAt': now,
+      });
+    }
   }
 
-  Future<Map<String, List<double>>> getAllEmbeddings() async {
+  /// Returns all embeddings grouped by thoughtId.
+  /// Each entry maps thoughtId → list of (chunkIndex, vector) pairs.
+  Future<Map<String, List<List<double>>>> getAllEmbeddings() async {
     final db = await database;
-    final maps = await db.query(_embeddingsTable);
-    final result = <String, List<double>>{};
+    final maps = await db.query(_embeddingsTable, orderBy: 'thoughtId, chunkIndex');
+    final result = <String, List<List<double>>>{};
     for (final row in maps) {
-      final id = row['thoughtId'] as String;
+      final tid = row['thoughtId'] as String;
       final vectorJson = row['vector'] as String;
       final vector = (jsonDecode(vectorJson) as List)
           .map((v) => (v as num).toDouble())
           .toList();
-      result[id] = vector;
+      result.putIfAbsent(tid, () => []).add(vector);
     }
     return result;
   }
@@ -296,6 +307,7 @@ class DatabaseService {
       columns: ['textHash'],
       where: 'thoughtId = ?',
       whereArgs: [thoughtId],
+      limit: 1,
     );
     if (maps.isEmpty) return null;
     return maps.first['textHash'] as String?;
@@ -303,9 +315,8 @@ class DatabaseService {
 
   Future<Set<String>> getEmbeddedThoughtIds() async {
     final db = await database;
-    final maps = await db.query(
-      _embeddingsTable,
-      columns: ['thoughtId'],
+    final maps = await db.rawQuery(
+      'SELECT DISTINCT thoughtId FROM $_embeddingsTable',
     );
     return maps.map((m) => m['thoughtId'] as String).toSet();
   }

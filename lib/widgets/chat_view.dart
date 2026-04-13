@@ -161,11 +161,22 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
   }
 
   Widget _buildEmptyChat(bool isDark, SynapseProvider provider) {
-    final suggestions = [
-      'What did I save about travel?',
-      'Summarize my recent links',
-      'Any restaurant recommendations?',
-    ];
+    final hasMemories = provider.totalItemCount > 0;
+    final suggestions = hasMemories
+        ? [
+            'What did I save about travel?',
+            'Summarize my recent links',
+            'Compare my saved restaurants',
+          ]
+        : [
+            'Share an Instagram post first',
+            'Save a link to get started',
+          ];
+
+    final title = hasMemories ? 'Ask me anything' : 'Your cortex awaits';
+    final subtitle = hasMemories
+        ? 'I can search through your saved\nmemories and answer questions.'
+        : 'Share posts, links, or screenshots\nfrom any app to build your memory.\nThen ask me anything about them.';
 
     return Center(
       child: SingleChildScrollView(
@@ -196,7 +207,9 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
                     borderRadius: BorderRadius.circular(18),
                   ),
                   child: Icon(
-                    Icons.auto_awesome_rounded,
+                    hasMemories
+                        ? Icons.auto_awesome_rounded
+                        : Icons.psychology_outlined,
                     color: isDark
                         ? SynapseColors.darkAccent
                         : SynapseColors.accent,
@@ -207,7 +220,7 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
             ),
             const SizedBox(height: 28),
             Text(
-              'Ask me anything',
+              title,
               style: GoogleFonts.spaceGrotesk(
                 fontSize: 28,
                 fontWeight: FontWeight.w800,
@@ -217,7 +230,7 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
             ),
             const SizedBox(height: 8),
             Text(
-              'I can search through your saved\nmemories and answer questions.',
+              subtitle,
               style: GoogleFonts.spaceGrotesk(
                 fontSize: 14,
                 color: SynapseColors.inkMuted,

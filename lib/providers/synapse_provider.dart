@@ -73,6 +73,8 @@ class SynapseProvider extends ChangeNotifier {
   // Dead link state
   int _deadLinkCount = 0;
   bool _isCheckingDeadLinks = false;
+  bool _filterDeadLinks = false;
+  bool get filterDeadLinks => _filterDeadLinks;
 
   // Chat state
   List<ChatMessage> _chatMessages = [];
@@ -103,7 +105,8 @@ class SynapseProvider extends ChangeNotifier {
   void _bumpDataVersion() { _dataVersion++; }
   List<Thought> get allItems => _items;
   bool get isFilterActive =>
-      _selectedCategory != null || _selectedGroup != null || _searchQuery.isNotEmpty;
+      _selectedCategory != null || _selectedGroup != null ||
+      _searchQuery.isNotEmpty || _filterDeadLinks;
   ThoughtCategory? get selectedCategory => _selectedCategory;
   String get searchQuery => _searchQuery;
   bool get isLoading => _isLoading;
@@ -212,23 +215,79 @@ class SynapseProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  bool _isSemanticSearching = false;
+  bool get isSemanticSearching => _isSemanticSearching;
+
   Future<void> search(String query) async {
     _searchQuery = query;
     if (query.isEmpty) {
+      _isSemanticSearching = false;
       _applyFilters();
     } else {
+      // Start with fast keyword search for instant results
       _filteredItems = await _db.searchThoughts(query);
       if (_selectedCategory != null) {
         _filteredItems = _filteredItems
             .where((t) => t.category == _selectedCategory)
             .toList();
       }
+      notifyListeners();
+
+      // Then augment with semantic search results
+      if (query.length >= 3) {
+        _isSemanticSearching = true;
+        notifyListeners();
+        try {
+          final scored = await _vectorSearch.search(query, _items, topK: 20);
+          if (scored.isNotEmpty && _searchQuery == query) {
+            final keywordIds = _filteredItems.map((t) => t.id).toSet();
+            final semanticOnly = scored
+                .where((s) => !keywordIds.contains(s.thought.id))
+                .map((s) => s.thought)
+                .toList();
+            if (semanticOnly.isNotEmpty) {
+              _filteredItems = [..._filteredItems, ...semanticOnly];
+              if (_selectedCategory != null) {
+                _filteredItems = _filteredItems
+                    .where((t) => t.category == _selectedCategory)
+                    .toList();
+              }
+            }
+          }
+        } catch (e) {
+          _dbg.log('SEARCH', 'Semantic search error: $e');
+        }
+        _isSemanticSearching = false;
+      }
     }
     notifyListeners();
   }
 
+  void toggleDeadLinkFilter() {
+    _filterDeadLinks = !_filterDeadLinks;
+    if (_filterDeadLinks) {
+      _selectedCategory = null;
+      _selectedGroup = null;
+      _searchQuery = '';
+    }
+    _applyFilters();
+    notifyListeners();
+  }
+
+  Future<void> deleteAllDeadLinks() async {
+    final deadIds = _items.where((t) => t.isLinkDead).map((t) => t.id).toSet();
+    if (deadIds.isEmpty) return;
+    await deleteMultipleThoughts(deadIds);
+    _deadLinkCount = 0;
+    _filterDeadLinks = false;
+    _applyFilters();
+    notifyListeners();
+  }
+
   void _applyFilters() {
-    if (_selectedCategory == null &&
+    if (_filterDeadLinks) {
+      _filteredItems = _items.where((t) => t.isLinkDead).toList();
+    } else if (_selectedCategory == null &&
         _searchQuery.isEmpty &&
         _selectedGroup == null) {
       _filteredItems = [];
@@ -310,6 +369,7 @@ class SynapseProvider extends ChangeNotifier {
   Future<void> deleteMultipleThoughts(Set<String> ids) async {
     for (final id in ids) {
       await _db.deleteThought(id);
+      _vectorSearch.removeThought(id);
     }
     _items.removeWhere((t) => ids.contains(t.id));
     _filteredItems.removeWhere((t) => ids.contains(t.id));
@@ -475,7 +535,6 @@ class SynapseProvider extends ChangeNotifier {
       return;
     }
 
-    // RAG: vector search for relevant context instead of sending everything
     _dbg.log('RAG', 'query="${text.substring(0, text.length.clamp(0, 60))}"');
     List<Thought> contextItems;
     final scored = await _vectorSearch.search(text, _items);
@@ -484,12 +543,13 @@ class SynapseProvider extends ChangeNotifier {
       _dbg.log('RAG', 'sending ${contextItems.length} relevant items '
           'to LLM (out of ${_items.length} total)');
     } else {
-      contextItems = _items;
-      _dbg.log('RAG', 'FALLBACK — no embeddings, sending all '
-          '${_items.length} items');
+      const fallbackCap = 20;
+      contextItems = _items.take(fallbackCap).toList();
+      _dbg.log('RAG', 'FALLBACK — no vector hits, sending '
+          '${contextItems.length} most recent items (capped at $fallbackCap)');
     }
 
-    final answer = await _llm.askQuestion(text, contextItems);
+    final answer = await _llm.askQuestion(text, contextItems, chatHistory: _chatMessages);
     _isChatLoading = false;
 
     await addChatMessage(ChatMessage(
@@ -517,7 +577,7 @@ class SynapseProvider extends ChangeNotifier {
     final scored = await _vectorSearch.search(question, _items);
     final context = scored.isNotEmpty
         ? scored.map((s) => s.thought).toList()
-        : _items;
+        : _items.take(20).toList();
     return await _llm.askQuestion(question, context);
   }
 

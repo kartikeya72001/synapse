@@ -7,6 +7,7 @@ import 'package:receive_sharing_intent/receive_sharing_intent.dart';
 import 'package:uuid/uuid.dart';
 import '../models/thought.dart';
 import '../services/database_service.dart';
+import '../services/dead_link_service.dart';
 import '../services/debug_logger.dart';
 import '../services/exif_service.dart';
 import '../services/link_preview_service.dart';
@@ -25,6 +26,7 @@ class ShareHandlerService {
   final OcrService _ocr = OcrService();
   final ExifService _exif = ExifService();
   final InstagramFetchService _instagram = InstagramFetchService();
+  final DeadLinkService _deadLinkService = DeadLinkService();
   final Uuid _uuid = const Uuid();
 
   StreamSubscription? _intentSub;
@@ -136,6 +138,11 @@ class ShareHandlerService {
     await _db.insertThought(thought);
     onThoughtSaved?.call(thought);
     _dbg.log('DB', 'Thought saved id=${thought.id}');
+
+    // Proactively cache page text for link-rot resilience
+    if (!isSocial) {
+      _cachePageContent(thought);
+    }
 
     if (isSocial) {
       _dbg.log('SOCIAL', 'Starting social media extraction...');
@@ -420,6 +427,25 @@ class ShareHandlerService {
       _dbg.log('REFETCH', 'Failed for ${thought.url}: $e');
       return null;
     }
+  }
+
+  /// Proactively caches page text content for link-rot resilience.
+  /// Runs in the background without blocking the save flow.
+  void _cachePageContent(Thought thought) {
+    if (thought.url == null || thought.url!.isEmpty) return;
+    Future.microtask(() async {
+      try {
+        final cached = await _deadLinkService.cachePageText(thought.url!);
+        if (cached != null && cached.isNotEmpty) {
+          final updated = thought.copyWith(cachedText: cached);
+          await _db.updateThought(updated);
+          _dbg.log('CACHE', 'Cached ${cached.length} chars for '
+              '"${thought.displayTitle}"');
+        }
+      } catch (e) {
+        _dbg.log('CACHE', 'Failed for "${thought.displayTitle}": $e');
+      }
+    });
   }
 
   bool _isUrl(String text) {

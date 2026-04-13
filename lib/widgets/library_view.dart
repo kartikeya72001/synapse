@@ -174,6 +174,17 @@ class _LibraryViewState extends State<LibraryView> {
                 onChanged: (q) => provider.search(q),
               ),
             ),
+            if (provider.isSemanticSearching)
+              Padding(
+                padding: const EdgeInsets.only(right: 12),
+                child: SizedBox(
+                  width: 16, height: 16,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 1.5,
+                    color: SynapseColors.accent,
+                  ),
+                ),
+              ),
           ],
         ),
       ),
@@ -447,8 +458,12 @@ class _LibraryViewState extends State<LibraryView> {
               ),
             if (hasDeadLinks)
               _actionCard(
-                icon: Icons.link_off_rounded,
-                label: '${provider.deadLinkCount} broken',
+                icon: provider.filterDeadLinks
+                    ? Icons.close_rounded
+                    : Icons.link_off_rounded,
+                label: provider.filterDeadLinks
+                    ? 'Clear filter'
+                    : '${provider.deadLinkCount} broken',
                 gradient: LinearGradient(
                   colors: [
                     SynapseColors.error,
@@ -456,6 +471,43 @@ class _LibraryViewState extends State<LibraryView> {
                   ],
                 ),
                 textColor: Colors.white,
+                onTap: () => provider.toggleDeadLinkFilter(),
+              ),
+            if (provider.filterDeadLinks)
+              _actionCard(
+                icon: Icons.delete_sweep_rounded,
+                label: 'Remove all',
+                gradient: LinearGradient(
+                  colors: [
+                    Colors.red.shade700,
+                    Colors.red.shade500,
+                  ],
+                ),
+                textColor: Colors.white,
+                onTap: () async {
+                  final confirm = await showDialog<bool>(
+                    context: context,
+                    builder: (ctx) => AlertDialog(
+                      title: const Text('Remove all dead links?'),
+                      content: const Text(
+                          'This will permanently delete all memories with broken links.'),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(ctx, false),
+                          child: const Text('Cancel'),
+                        ),
+                        TextButton(
+                          onPressed: () => Navigator.pop(ctx, true),
+                          child: Text('Remove',
+                              style: TextStyle(color: SynapseColors.error)),
+                        ),
+                      ],
+                    ),
+                  );
+                  if (confirm == true) {
+                    provider.deleteAllDeadLinks();
+                  }
+                },
               ),
           ],
         ),

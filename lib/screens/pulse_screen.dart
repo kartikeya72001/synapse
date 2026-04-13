@@ -14,7 +14,8 @@ class PulseScreen extends StatefulWidget {
   State<PulseScreen> createState() => _PulseScreenState();
 }
 
-class _PulseScreenState extends State<PulseScreen> {
+class _PulseScreenState extends State<PulseScreen>
+    with AutomaticKeepAliveClientMixin {
   final _graphTransform = TransformationController();
   String? _hoveredNodeId;
   bool _tagsExpanded = false;
@@ -24,12 +25,22 @@ class _PulseScreenState extends State<PulseScreen> {
   bool _isComputing = false;
 
   @override
+  bool get wantKeepAlive => true;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _recomputeIfNeeded());
+  }
+
+  @override
   void dispose() {
     _graphTransform.dispose();
     super.dispose();
   }
 
-  void _refreshIfNeeded() {
+  void _recomputeIfNeeded() {
+    if (!mounted || _isComputing) return;
     final provider = context.read<SynapseProvider>();
     final currentVersion = provider.dataVersion;
     if (currentVersion == _lastDataVersion && _data != null) return;
@@ -95,9 +106,14 @@ class _PulseScreenState extends State<PulseScreen> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    _refreshIfNeeded();
+    final currentVersion = context.select<SynapseProvider, int>(
+        (p) => p.dataVersion);
+    if (currentVersion != _lastDataVersion) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _recomputeIfNeeded());
+    }
 
     if (_isComputing || _data == null) {
       return Container(
@@ -131,6 +147,70 @@ class _PulseScreenState extends State<PulseScreen> {
 
     final data = _data!;
     final provider = context.read<SynapseProvider>();
+
+    if (data.total == 0) {
+      return Container(
+        decoration: BoxDecoration(
+          gradient: isDark ? SynapseGradients.pulseBgDark : SynapseGradients.pulseBg,
+        ),
+        child: SafeArea(
+          bottom: false,
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(48),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 80, height: 80,
+                    decoration: BoxDecoration(
+                    gradient: RadialGradient(
+                      colors: [
+                        SynapseColors.mint.withValues(alpha: 0.5),
+                        SynapseColors.mint.withValues(alpha: 0.0),
+                      ],
+                    ),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Center(
+                    child: Container(
+                      width: 48, height: 48,
+                      decoration: BoxDecoration(
+                        color: SynapseColors.mintLight,
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: Icon(Icons.monitor_heart_outlined,
+                          size: 24, color: SynapseColors.accent),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  Text(
+                    'Your pulse is quiet',
+                    style: GoogleFonts.spaceGrotesk(
+                      fontSize: 22,
+                      fontWeight: FontWeight.w800,
+                      color: isDark ? SynapseColors.darkInk : SynapseColors.ink,
+                      letterSpacing: -0.3,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Analytics will come to life as you\nadd memories. Start by sharing a\nlink or post from any app.',
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.spaceGrotesk(
+                      fontSize: 14,
+                      color: SynapseColors.inkMuted,
+                      height: 1.5,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
 
     return Container(
       decoration: BoxDecoration(
@@ -210,7 +290,7 @@ class _PulseScreenState extends State<PulseScreen> {
           ),
           const SizedBox(width: 8),
           Text(
-            'touch a node to interact with the graph',
+            'touch a node to interact',
             style: GoogleFonts.spaceGrotesk(
               fontSize: 10,
               fontWeight: FontWeight.w400,
@@ -544,28 +624,28 @@ class _PulseScreenState extends State<PulseScreen> {
       padding: const EdgeInsets.symmetric(horizontal: 20),
       child: Stack(
         children: [
-          Container(
-            height: 420,
-            decoration: _sectionBox(isDark),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(20),
-              child: InteractiveViewer(
-                transformationController: _graphTransform,
-                minScale: 0.3,
-                maxScale: 4.0,
-                boundaryMargin: const EdgeInsets.all(200),
-                child: GestureDetector(
-              onTapUp: (d) => _handleGraphTap(d, data.graph, isDark),
-              child: RepaintBoundary(
-                child: CustomPaint(
-                  painter: _GraphPainter(
-                    graph: data.graph,
-                    isDark: isDark,
-                    hoveredId: _hoveredNodeId,
+          GestureDetector(
+            onTapUp: (d) => _handleGraphTap(d, data.graph, isDark),
+            child: Container(
+              height: 420,
+              decoration: _sectionBox(isDark),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(20),
+                child: InteractiveViewer(
+                  transformationController: _graphTransform,
+                  minScale: 0.3,
+                  maxScale: 4.0,
+                  boundaryMargin: const EdgeInsets.all(200),
+                  child: RepaintBoundary(
+                    child: CustomPaint(
+                      painter: _GraphPainter(
+                        graph: data.graph,
+                        isDark: isDark,
+                        hoveredId: _hoveredNodeId,
+                      ),
+                      size: Size.infinite,
+                    ),
                   ),
-                  size: Size.infinite,
-                ),
-              ),
                 ),
               ),
             ),

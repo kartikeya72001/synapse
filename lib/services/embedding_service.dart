@@ -194,6 +194,35 @@ class EmbeddingService {
     return results;
   }
 
+  /// Splits text into chunks of roughly [maxTokens] words.
+  /// Preserves paragraph boundaries where possible.
+  static List<String> chunkText(String text, {int maxTokens = 300}) {
+    if (text.trim().isEmpty) return [];
+    final words = text.split(RegExp(r'\s+'));
+    if (words.length <= maxTokens) return [text];
+
+    final paragraphs = text.split(RegExp(r'\n{2,}'));
+    final chunks = <String>[];
+    var current = StringBuffer();
+    int currentLen = 0;
+
+    for (final para in paragraphs) {
+      final paraWords = para.split(RegExp(r'\s+')).length;
+      if (currentLen + paraWords > maxTokens && currentLen > 0) {
+        chunks.add(current.toString().trim());
+        current = StringBuffer();
+        currentLen = 0;
+      }
+      if (current.isNotEmpty) current.write('\n\n');
+      current.write(para);
+      currentLen += paraWords;
+    }
+    if (current.isNotEmpty) {
+      chunks.add(current.toString().trim());
+    }
+    return chunks.where((c) => c.trim().isNotEmpty).toList();
+  }
+
   /// Cosine similarity between two vectors.
   static double cosineSimilarity(List<double> a, List<double> b) {
     if (a.length != b.length || a.isEmpty) return 0.0;
