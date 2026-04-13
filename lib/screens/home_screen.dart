@@ -198,7 +198,7 @@ class _BottomNav extends StatelessWidget {
     final isActive = currentIndex == idx;
     final activeColor = _pageAccentColor(idx, isDark);
     final inactiveColor =
-        isDark ? SynapseColors.darkInkMuted : SynapseColors.inkFaint;
+        isDark ? Colors.white.withValues(alpha: 0.5) : SynapseColors.inkMuted;
 
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
