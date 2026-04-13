@@ -136,7 +136,7 @@ class _NavItem {
   const _NavItem(this.outlinedIcon, this.filledIcon, this.label);
 }
 
-class _BottomNav extends StatelessWidget {
+class _BottomNav extends StatefulWidget {
   final int currentIndex;
   final bool isDark;
   final ValueChanged<int> onTabTap;
@@ -148,10 +148,51 @@ class _BottomNav extends StatelessWidget {
   });
 
   @override
+  State<_BottomNav> createState() => _BottomNavState();
+}
+
+class _BottomNavState extends State<_BottomNav> {
+  final _scrollCtrl = ScrollController();
+  bool _canScrollRight = true;
+  bool _canScrollLeft = false;
+
+  bool get isDark => widget.isDark;
+  int get currentIndex => widget.currentIndex;
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollCtrl.addListener(_onScroll);
+  }
+
+  @override
+  void dispose() {
+    _scrollCtrl.removeListener(_onScroll);
+    _scrollCtrl.dispose();
+    super.dispose();
+  }
+
+  void _onScroll() {
+    if (!_scrollCtrl.hasClients) return;
+    final pos = _scrollCtrl.position;
+    final newRight = pos.pixels < pos.maxScrollExtent - 4;
+    final newLeft = pos.pixels > 4;
+    if (newRight != _canScrollRight || newLeft != _canScrollLeft) {
+      setState(() {
+        _canScrollRight = newRight;
+        _canScrollLeft = newLeft;
+      });
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     final bottomPad = MediaQuery.of(context).padding.bottom;
     final screenWidth = MediaQuery.of(context).size.width;
-    final navContentWidth = screenWidth - 32;
+    final navBarWidth = screenWidth - 32;
+    const horizontalPad = 8.0;
+    final usableWidth = navBarWidth - horizontalPad * 2;
+    final itemWidth = usableWidth / 4.4;
 
     return Container(
       margin: EdgeInsets.fromLTRB(16, 0, 16, bottomPad + 10),
@@ -160,7 +201,8 @@ class _BottomNav extends StatelessWidget {
         child: BackdropFilter(
           filter: ImageFilter.blur(sigmaX: 40, sigmaY: 40),
           child: Container(
-            padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
+            padding: const EdgeInsets.symmetric(
+                vertical: 10, horizontal: horizontalPad),
             decoration: BoxDecoration(
               color: isDark
                   ? Colors.black.withValues(alpha: 0.2)
@@ -171,19 +213,67 @@ class _BottomNav extends StatelessWidget {
                     .withValues(alpha: 0.08),
               ),
             ),
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              physics: const BouncingScrollPhysics(),
-              child: ConstrainedBox(
-                constraints: BoxConstraints(minWidth: navContentWidth - 8),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                  children: List.generate(
-                    _HomeScreenState._navItems.length,
-                    (i) => _buildNavItem(i),
+            child: Stack(
+              children: [
+                SingleChildScrollView(
+                  controller: _scrollCtrl,
+                  scrollDirection: Axis.horizontal,
+                  physics: const BouncingScrollPhysics(),
+                  child: Row(
+                    children: List.generate(
+                      _HomeScreenState._navItems.length,
+                      (i) => SizedBox(
+                        width: itemWidth,
+                        child: _buildNavItem(i),
+                      ),
+                    ),
                   ),
                 ),
-              ),
+                Positioned(
+                  right: 0,
+                  top: 0,
+                  bottom: 0,
+                  child: _scrollChevron(
+                    icon: Icons.chevron_right_rounded,
+                    visible: _canScrollRight,
+                  ),
+                ),
+                Positioned(
+                  left: 0,
+                  top: 0,
+                  bottom: 0,
+                  child: _scrollChevron(
+                    icon: Icons.chevron_left_rounded,
+                    visible: _canScrollLeft,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _scrollChevron({required IconData icon, required bool visible}) {
+    return IgnorePointer(
+      child: AnimatedOpacity(
+        opacity: visible ? 1.0 : 0.0,
+        duration: const Duration(milliseconds: 200),
+        child: Center(
+          child: Container(
+            width: 22,
+            height: 22,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: (isDark ? Colors.white : Colors.black)
+                  .withValues(alpha: 0.10),
+            ),
+            child: Icon(
+              icon,
+              size: 14,
+              color: (isDark ? Colors.white : Colors.black)
+                  .withValues(alpha: 0.45),
             ),
           ),
         ),
@@ -219,7 +309,7 @@ class _BottomNav extends StatelessWidget {
 
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
-      onTap: () => onTabTap(idx),
+      onTap: () => widget.onTabTap(idx),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 250),
         curve: Curves.easeOutCubic,

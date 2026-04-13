@@ -846,20 +846,38 @@ Do NOT include "=== ITEM ===" headers.''';
   }) async {
     int attempt = 0;
     while (true) {
-      final response = await request();
-      if (response.statusCode == 429 || response.statusCode == 503) {
+      try {
+        final response = await request();
+        if (response.statusCode == 429 || response.statusCode == 503) {
+          attempt++;
+          if (attempt >= maxRetries) {
+            extractor(response);
+            return null;
+          }
+          final waitSeconds = attempt * 5;
+          _dbg.log('LLM', 'rate-limited (${response.statusCode}), '
+              'retrying in ${waitSeconds}s (attempt $attempt/$maxRetries)');
+          await Future.delayed(Duration(seconds: waitSeconds));
+          continue;
+        }
+        return extractor(response);
+      } on TimeoutException {
         attempt++;
+        _dbg.log('LLM', 'request timed out (attempt $attempt/$maxRetries)');
         if (attempt >= maxRetries) {
-          extractor(response);
+          _lastError = 'Request timed out after $maxRetries attempts.';
           return null;
         }
-        final waitSeconds = attempt * 5;
-        _dbg.log('LLM', 'rate-limited (${response.statusCode}), '
-            'retrying in ${waitSeconds}s (attempt $attempt/$maxRetries)');
-        await Future.delayed(Duration(seconds: waitSeconds));
-        continue;
+        await Future.delayed(Duration(seconds: attempt * 3));
+      } catch (e) {
+        attempt++;
+        _dbg.log('LLM', 'network error: $e (attempt $attempt/$maxRetries)');
+        if (attempt >= maxRetries) {
+          _lastError = 'Network error after $maxRetries attempts: $e';
+          return null;
+        }
+        await Future.delayed(Duration(seconds: attempt * 3));
       }
-      return extractor(response);
     }
   }
 
