@@ -8,6 +8,7 @@ import '../theme/app_theme.dart';
 import '../widgets/chat_view.dart';
 import '../widgets/library_view.dart';
 import 'add_thought_screen.dart';
+import 'pulse_screen.dart';
 import 'secrets_screen.dart';
 import 'settings_screen.dart';
 import 'thought_detail_screen.dart';
@@ -25,7 +26,7 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _vaultVisited = false;
 
   void _switchTab(int i) {
-    if (i == 3 && !_vaultVisited) _vaultVisited = true;
+    if (i == 4 && !_vaultVisited) _vaultVisited = true;
     setState(() => _tab = i);
   }
 
@@ -33,6 +34,7 @@ class _HomeScreenState extends State<HomeScreen> {
     _NavItem(Icons.chat_bubble_outline_rounded, Icons.chat_bubble_rounded, 'Cortex'),
     _NavItem(Icons.auto_awesome_mosaic_outlined, Icons.auto_awesome_mosaic_rounded, 'Memories'),
     _NavItem(Icons.timeline_rounded, Icons.timeline_rounded, 'Recall'),
+    _NavItem(Icons.monitor_heart_outlined, Icons.monitor_heart_rounded, 'Pulse'),
     _NavItem(Icons.shield_outlined, Icons.shield_rounded, 'Vault'),
     _NavItem(Icons.tune_outlined, Icons.tune_rounded, 'Settings'),
   ];
@@ -53,6 +55,7 @@ class _HomeScreenState extends State<HomeScreen> {
               const ChatView(),
               const LibraryView(),
               const TimelineScreen(),
+              const PulseScreen(),
               if (_vaultVisited)
                 const SecretsScreen()
               else
@@ -144,6 +147,8 @@ class _BottomNav extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final bottomPad = MediaQuery.of(context).padding.bottom;
+    final screenWidth = MediaQuery.of(context).size.width;
+    final navContentWidth = screenWidth - 32;
 
     return Container(
       margin: EdgeInsets.fromLTRB(16, 0, 16, bottomPad + 10),
@@ -163,11 +168,18 @@ class _BottomNav extends StatelessWidget {
                     .withValues(alpha: 0.08),
               ),
             ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: List.generate(
-                _HomeScreenState._navItems.length,
-                (i) => _buildNavItem(i),
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              physics: const BouncingScrollPhysics(),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(minWidth: navContentWidth - 8),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: List.generate(
+                    _HomeScreenState._navItems.length,
+                    (i) => _buildNavItem(i),
+                  ),
+                ),
               ),
             ),
           ),
@@ -178,15 +190,17 @@ class _BottomNav extends StatelessWidget {
 
   Color _pageAccentColor(int idx, bool isDark) {
     switch (idx) {
-      case 0: // Cortex - lavender/purple
+      case 0:
         return isDark ? const Color(0xFFBF9EF7) : const Color(0xFF8B5BD8);
-      case 1: // Memories - lavender
+      case 1:
         return isDark ? const Color(0xFFBF9EF7) : const Color(0xFFA371F2);
-      case 2: // Recall - sky blue
+      case 2:
         return isDark ? const Color(0xFF64B5F6) : const Color(0xFF5B9BD5);
-      case 3: // Vault - coral/red
+      case 3:
+        return isDark ? const Color(0xFF4DD0B8) : const Color(0xFF00897B);
+      case 4:
         return isDark ? const Color(0xFFEF9A9A) : const Color(0xFFD32F2F);
-      case 4: // Settings - neutral lavender
+      case 5:
         return isDark ? const Color(0xFFBF9EF7) : const Color(0xFF8B5BD8);
       default:
         return isDark ? SynapseColors.darkInk : SynapseColors.ink;

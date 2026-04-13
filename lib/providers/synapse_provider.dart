@@ -98,6 +98,10 @@ class SynapseProvider extends ChangeNotifier {
           ? _items
           : _filteredItems;
   int get totalItemCount => _items.length;
+  int _dataVersion = 0;
+  int get dataVersion => _dataVersion;
+  void _bumpDataVersion() { _dataVersion++; }
+  List<Thought> get allItems => _items;
   bool get isFilterActive =>
       _selectedCategory != null || _selectedGroup != null || _searchQuery.isNotEmpty;
   ThoughtCategory? get selectedCategory => _selectedCategory;
@@ -243,6 +247,7 @@ class SynapseProvider extends ChangeNotifier {
       _items.insert(0, thought);
     }
     _applyFilters();
+    _bumpDataVersion();
     if (fromShare && isNew) {
       final prefs = await SharedPreferences.getInstance();
       final bgMode = prefs.getBool(AppConstants.backgroundSharePref) ?? false;
@@ -276,6 +281,7 @@ class SynapseProvider extends ChangeNotifier {
       _items.insert(0, thought);
     }
     _applyFilters();
+    _bumpDataVersion();
     notifyListeners();
     await _vectorSearch.indexThought(thought);
   }
@@ -285,6 +291,7 @@ class SynapseProvider extends ChangeNotifier {
     _vectorSearch.removeThought(id);
     _items.removeWhere((t) => t.id == id);
     _filteredItems.removeWhere((t) => t.id == id);
+    _bumpDataVersion();
     notifyListeners();
   }
 
@@ -294,9 +301,9 @@ class SynapseProvider extends ChangeNotifier {
     if (idx != -1) _items[idx] = thought;
     final fIdx = _filteredItems.indexWhere((i) => i.id == thought.id);
     if (fIdx != -1) _filteredItems[fIdx] = thought;
+    _bumpDataVersion();
     notifyListeners();
 
-    // Re-index embedding on any content change (hash check inside skips if unchanged)
     _vectorSearch.indexThought(thought);
   }
 
@@ -306,6 +313,7 @@ class SynapseProvider extends ChangeNotifier {
     }
     _items.removeWhere((t) => ids.contains(t.id));
     _filteredItems.removeWhere((t) => ids.contains(t.id));
+    _bumpDataVersion();
     notifyListeners();
   }
 

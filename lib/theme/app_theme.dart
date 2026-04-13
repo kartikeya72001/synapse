@@ -286,6 +286,20 @@ class SynapseGradients {
     stops: [0.0, 0.45, 1.0],
   );
 
+  // Pulse — teal/mint analytics gradient
+  static const LinearGradient pulseBg = LinearGradient(
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+    colors: [Color(0xFFE6F8F5), Color(0xFFECF0FC), Color(0xFFFFFFFF)],
+    stops: [0.0, 0.45, 1.0],
+  );
+  static const LinearGradient pulseBgDark = LinearGradient(
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+    colors: [Color(0xFF0F2028), Color(0xFF0C1420), Color(0xFF050308)],
+    stops: [0.0, 0.5, 1.0],
+  );
+
   // Settings — neutral lavender
   static const LinearGradient settingsBg = LinearGradient(
     begin: Alignment.topCenter,
