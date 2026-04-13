@@ -2,7 +2,7 @@ name: synapse
 description: "Your second brain. Save, classify, and query anything you find."
 publish_to: 'none'
 
-version: 2.0.0+2
+version: 2.1.0+3
 
 environment:
   sdk: ^3.10.4
@@ -69,14 +69,23 @@ dependencies:
   permission_handler: ^12.0.1
   crypto: ^3.0.6
   file_picker: ^11.0.2
+  share_plus: ^12.0.2
+  sentry_flutter: ^9.0.0
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
+  flutter_launcher_icons: ^0.14.4
 
 flutter:
   uses-material-design: true
   
   assets:
     - assets/
+
+flutter_launcher_icons:
+  android: "ic_launcher_new"
+  ios: false
+  image_path: "assets/app_icon.png"
+  min_sdk_android: 21

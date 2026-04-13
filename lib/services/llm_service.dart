@@ -174,6 +174,9 @@ class LlmService {
       if (item.llmSummary != null) parts.add('Summary: ${item.llmSummary}');
       if (item.extractedInfo != null) parts.add('Details: ${item.extractedInfo}');
       if (item.ocrText != null) parts.add('OCR Text: ${item.ocrText}');
+      if (item.userNotes != null && item.userNotes!.isNotEmpty) {
+        parts.add('User Notes: ${item.userNotes}');
+      }
       if (item.tags.isNotEmpty) parts.add('Tags: ${item.tags.join(", ")}');
       parts.add('Category: ${item.category.label}');
       return parts.join('\n');
@@ -182,9 +185,14 @@ class LlmService {
     // Build conversation history with sliding window
     final historyStr = _buildConversationContext(chatHistory);
 
+    final prefs = await SharedPreferences.getInstance();
+    final persona = prefs.getString(AppConstants.ragPersonaPref) ?? 'balanced';
+    final personaInstruction = _personaInstruction(persona);
+
     final prompt = '''You are Synapse, a personal assistant that ONLY answers 
 from the user's saved memories provided below. You must NEVER use outside 
 knowledge, training data, or information from the internet.
+$personaInstruction
 
 STRICT RULES:
 1. ONLY use facts, names, details, and recommendations found in the CONTEXT below.
@@ -279,6 +287,28 @@ QUESTION: $question''';
       buf.writeln('$role: ${m.text}');
     }
     return buf.toString();
+  }
+
+  String _personaInstruction(String persona) {
+    switch (persona) {
+      case 'concise':
+        return '\nRESPONSE STYLE: Be extremely concise. Use short sentences, '
+            'bullet points, and minimal prose. Aim for the fewest words possible '
+            'while still being complete.';
+      case 'detailed':
+        return '\nRESPONSE STYLE: Be thorough and detailed. Provide comprehensive '
+            'answers with full explanations, examples, and context. Leave no '
+            'relevant detail out.';
+      case 'casual':
+        return '\nRESPONSE STYLE: Be friendly and conversational. Use a warm, '
+            'casual tone as if chatting with a friend. Keep it natural and relaxed.';
+      case 'professional':
+        return '\nRESPONSE STYLE: Be formal and professional. Use precise language, '
+            'structured formatting, and a polished tone suitable for a work context.';
+      case 'balanced':
+      default:
+        return '';
+    }
   }
 
   // ── Video / Audio Transcription ──

@@ -35,6 +35,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _debugLog = false;
   bool _autoWire = true;
   String _selectedModel = 'gemini-3.1-flash-lite-preview';
+  String _ragPersona = 'balanced';
 
   static const List<int?> _autoDeletePresets = [null, 7, 15, 30, 90, 180, 365];
 
@@ -72,6 +73,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final dbgLog = prefs.getBool(AppConstants.debugLogPref) ?? false;
     final autoWire = prefs.getBool(AppConstants.autoWirePref) ?? true;
     final selectedModel = prefs.getString(AppConstants.geminiModelPref) ?? 'gemini-3.1-flash-lite-preview';
+    final ragPersona = prefs.getString(AppConstants.ragPersonaPref) ?? 'balanced';
 
     if (!mounted) return;
 
@@ -85,6 +87,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _debugLog = dbgLog;
       _autoWire = autoWire;
       _selectedModel = selectedModel;
+      _ragPersona = ragPersona;
     });
   }
 
@@ -191,6 +194,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
           _buildProviderSelector(theme, colorScheme, isDark),
           const SizedBox(height: 16),
           _buildModelSelector(theme, colorScheme, isDark),
+          const SizedBox(height: 16),
+          _buildPersonaSelector(theme, colorScheme, isDark),
           const SizedBox(height: 20),
           _buildApiKeyField(
             theme: theme,
@@ -1254,6 +1259,81 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
         );
       }).toList(),
+    );
+  }
+
+  Widget _buildPersonaSelector(ThemeData theme, ColorScheme colorScheme, bool isDark) {
+    const personas = [
+      ('balanced', 'Balanced', 'Default balanced responses', Icons.tune_rounded),
+      ('concise', 'Concise', 'Short and to the point', Icons.short_text_rounded),
+      ('detailed', 'Detailed', 'Thorough and comprehensive', Icons.subject_rounded),
+      ('casual', 'Casual', 'Friendly and conversational', Icons.chat_rounded),
+      ('professional', 'Professional', 'Formal and structured', Icons.business_center_rounded),
+    ];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Response Style',
+          style: GoogleFonts.spaceGrotesk(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: colorScheme.onSurface.withValues(alpha: 0.5),
+          ),
+        ),
+        const SizedBox(height: 10),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: personas.map((p) {
+            final isSelected = _ragPersona == p.$1;
+            return GestureDetector(
+              onTap: () async {
+                setState(() => _ragPersona = p.$1);
+                final prefs = await SharedPreferences.getInstance();
+                await prefs.setString(AppConstants.ragPersonaPref, p.$1);
+              },
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  gradient: isSelected
+                      ? LinearGradient(
+                          colors: isDark
+                              ? [SynapseColors.darkLavender, SynapseColors.darkCard]
+                              : [const Color(0xFFF3EDFF), Colors.white],
+                        )
+                      : null,
+                  color: isSelected ? null : (isDark ? SynapseColors.darkCard : SynapseColors.lightCard),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: isSelected
+                        ? SynapseColors.accent.withValues(alpha: 0.4)
+                        : (isDark ? Colors.white : Colors.black).withValues(alpha: 0.04),
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(p.$4, size: 14,
+                        color: isSelected ? SynapseColors.accent : colorScheme.onSurface.withValues(alpha: 0.4)),
+                    const SizedBox(width: 6),
+                    Text(
+                      p.$2,
+                      style: GoogleFonts.spaceGrotesk(
+                        fontSize: 12,
+                        fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                        color: isSelected ? SynapseColors.accent : colorScheme.onSurface.withValues(alpha: 0.6),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+      ],
     );
   }
 

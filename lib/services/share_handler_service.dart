@@ -13,6 +13,9 @@ import '../services/exif_service.dart';
 import '../services/link_preview_service.dart';
 import '../services/llm_service.dart';
 import '../services/instagram_fetch_service.dart';
+import '../services/youtube_fetch_service.dart';
+import '../services/twitter_fetch_service.dart';
+import '../services/linkedin_fetch_service.dart';
 import '../services/ocr_service.dart';
 import '../utils/url_utils.dart' as url_utils;
 import '../utils/thought_mapper.dart';
@@ -26,6 +29,9 @@ class ShareHandlerService {
   final OcrService _ocr = OcrService();
   final ExifService _exif = ExifService();
   final InstagramFetchService _instagram = InstagramFetchService();
+  final YoutubeFetchService _youtube = YoutubeFetchService();
+  final TwitterFetchService _twitter = TwitterFetchService();
+  final LinkedInFetchService _linkedin = LinkedInFetchService();
   final DeadLinkService _deadLinkService = DeadLinkService();
   final Uuid _uuid = const Uuid();
 
@@ -179,6 +185,14 @@ class ShareHandlerService {
       if (url_utils.isInstagramUrl(postUrl)) {
         allImages = await _instagram.fetchImages(postUrl);
         _dbg.log('WIRE', 'Instagram → ${allImages.length} image(s)');
+      } else if (url_utils.isYoutubeUrl(postUrl)) {
+        thought = await _enrichYoutube(thought, postUrl);
+      } else if (url_utils.isTwitterUrl(postUrl)) {
+        final twitterResult = await _enrichTwitter(thought, postUrl);
+        thought = twitterResult.$1;
+        allImages = twitterResult.$2;
+      } else if (url_utils.isLinkedInUrl(postUrl)) {
+        thought = await _enrichLinkedIn(thought, postUrl);
       }
 
       if (allImages.isEmpty && ogImageUrl != null) {
@@ -192,6 +206,23 @@ class ShareHandlerService {
           final bytes = await _instagram.downloadWithHeaders(freshUrl, postUrl);
           if (bytes != null) allImages = [bytes];
         }
+      }
+
+      // For YouTube, LinkedIn etc. that enriched via metadata, allow wiring even without images
+      if (allImages.isEmpty && !url_utils.isInstagramUrl(postUrl)) {
+        final enrichedDesc = thought.description ?? '';
+        if (enrichedDesc.isNotEmpty) {
+          _dbg.log('WIRE', 'No images but have enriched text — using text-only LLM classification');
+          final batchResult = await _llm.classifyBatch([thought]);
+          if (batchResult != null && batchResult.isNotEmpty) {
+            final updated = applyClassificationResult(thought, batchResult.first);
+            await _db.updateThought(updated);
+            onThoughtSaved?.call(updated);
+          }
+          return;
+        }
+        _dbg.log('WIRE', 'No images obtained — aborting');
+        return;
       }
 
       if (allImages.isEmpty) {
@@ -377,6 +408,60 @@ class ShareHandlerService {
     await _db.insertThought(thought);
     onThoughtSaved?.call(thought);
     return thought;
+  }
+
+  Future<Thought> _enrichYoutube(Thought thought, String url) async {
+    final yt = await _youtube.fetchVideoDetails(url);
+    if (yt == null) return thought;
+    final enriched = _youtube.buildEnhancedDescription(yt);
+    return thought.copyWith(
+      title: yt.title ?? thought.title,
+      description: enriched.isNotEmpty ? enriched : thought.description,
+      previewImageUrl: yt.thumbnailUrl ?? thought.previewImageUrl,
+      siteName: 'YouTube',
+      updatedAt: DateTime.now(),
+    );
+  }
+
+  Future<(Thought, List<Uint8List>)> _enrichTwitter(
+      Thought thought, String url) async {
+    final tw = await _twitter.fetchTweetDetails(url);
+    if (tw == null) return (thought, <Uint8List>[]);
+    final enriched = _twitter.buildEnhancedDescription(tw);
+    final updated = thought.copyWith(
+      title: tw.authorName != null ? '${tw.authorName}\'s post' : thought.title,
+      description: enriched.isNotEmpty ? enriched : thought.description,
+      siteName: 'Twitter',
+      updatedAt: DateTime.now(),
+    );
+    await _db.updateThought(updated);
+
+    // Download tweet images for LLM OCR
+    final images = <Uint8List>[];
+    for (final imgUrl in tw.imageUrls) {
+      try {
+        final bytes = await url_utils.fetchUrlBytesIfOk(
+          imgUrl,
+          headers: {'User-Agent': url_utils.mobileUserAgent},
+          minLength: 500,
+        );
+        if (bytes != null) images.add(bytes);
+      } catch (_) {}
+    }
+    return (updated, images);
+  }
+
+  Future<Thought> _enrichLinkedIn(Thought thought, String url) async {
+    final li = await _linkedin.fetchPostDetails(url);
+    if (li == null) return thought;
+    final enriched = _linkedin.buildEnhancedDescription(li);
+    return thought.copyWith(
+      title: li.title ?? thought.title,
+      description: enriched.isNotEmpty ? enriched : thought.description,
+      previewImageUrl: li.thumbnailUrl ?? thought.previewImageUrl,
+      siteName: 'LinkedIn',
+      updatedAt: DateTime.now(),
+    );
   }
 
   Future<Thought> saveLink(String url) async {

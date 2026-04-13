@@ -366,6 +366,16 @@ class SynapseProvider extends ChangeNotifier {
     _vectorSearch.indexThought(thought);
   }
 
+  Future<void> updateUserNotes(String thoughtId, String notes) async {
+    final idx = _items.indexWhere((i) => i.id == thoughtId);
+    if (idx == -1) return;
+    final updated = _items[idx].copyWith(
+      userNotes: notes,
+      updatedAt: DateTime.now(),
+    );
+    await updateThought(updated);
+  }
+
   Future<void> deleteMultipleThoughts(Set<String> ids) async {
     for (final id in ids) {
       await _db.deleteThought(id);
@@ -511,6 +521,14 @@ class SynapseProvider extends ChangeNotifier {
     _chatMessages.add(message);
     await _db.insertChatMessage(message);
     notifyListeners();
+    _trimChatIfNeeded();
+  }
+
+  Future<void> _trimChatIfNeeded() async {
+    if (_chatMessages.length > AppConstants.maxChatHistory + 10) {
+      await _db.trimChatMessages(AppConstants.maxChatHistory);
+      _chatMessages = await _db.getAllChatMessages();
+    }
   }
 
   Future<void> sendChatMessage(String text) async {
@@ -537,7 +555,10 @@ class SynapseProvider extends ChangeNotifier {
 
     _dbg.log('RAG', 'query="${text.substring(0, text.length.clamp(0, 60))}"');
     List<Thought> contextItems;
-    final scored = await _vectorSearch.search(text, _items);
+    // Use hierarchical search when there are enough memories for category clustering
+    final scored = _items.length >= 20
+        ? await _vectorSearch.hierarchicalSearch(text, _items)
+        : await _vectorSearch.search(text, _items);
     if (scored.isNotEmpty) {
       contextItems = scored.map((s) => s.thought).toList();
       _dbg.log('RAG', 'sending ${contextItems.length} relevant items '
@@ -767,7 +788,7 @@ class SynapseProvider extends ChangeNotifier {
     _runDeadLinkCheck();
   }
 
-  Future<void> _runDeadLinkCheck() async {
+  Future<void> _runDeadLinkCheck({bool includeAlreadyDead = false}) async {
     _isCheckingDeadLinks = true;
     notifyListeners();
 
@@ -775,8 +796,9 @@ class SynapseProvider extends ChangeNotifier {
         .where((t) =>
             t.type == ThoughtType.link &&
             t.url != null &&
-            !t.isLinkDead)
+            (!t.isLinkDead || includeAlreadyDead))
         .toList();
+        
     if (linkThoughts.isEmpty) {
       _isCheckingDeadLinks = false;
       notifyListeners();
@@ -784,20 +806,27 @@ class SynapseProvider extends ChangeNotifier {
     }
 
     final results = await _deadLinkService.checkLinks(linkThoughts);
-    int deadCount = 0;
+    int deadCount = _items.where((t) => t.isLinkDead).length; // Start with current count
+    
     for (final result in results) {
-      if (result.isDead) {
-        deadCount++;
-        final idx = _items.indexWhere((t) => t.id == result.thoughtId);
-        if (idx != -1) {
-          final updated = _items[idx].copyWith(isLinkDead: true);
+      final idx = _items.indexWhere((t) => t.id == result.thoughtId);
+      if (idx != -1) {
+        // Did the status change?
+        if (_items[idx].isLinkDead != result.isDead) {
+          if (result.isDead) {
+            deadCount++;
+          } else {
+            deadCount--;
+          }
+          final updated = _items[idx].copyWith(isLinkDead: result.isDead);
           await _db.updateThought(updated);
           _items[idx] = updated;
         }
       }
     }
 
-    _deadLinkCount = deadCount;
+    // Ensure count is accurate across the entire list just to be safe
+    _deadLinkCount = _items.where((t) => t.isLinkDead).length;
     _isCheckingDeadLinks = false;
 
     final prefs = await SharedPreferences.getInstance();
@@ -809,7 +838,7 @@ class SynapseProvider extends ChangeNotifier {
   }
 
   Future<void> forceDeadLinkCheck() async {
-    await _runDeadLinkCheck();
+    await _runDeadLinkCheck(includeAlreadyDead: true);
   }
 
   Future<void> cacheDeadLink(Thought thought) async {

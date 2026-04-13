@@ -9,3 +9,4 @@
 9. Check if the vault is searchable using the model, the vault should be absolutely local processing base, also, a memory should be transferrable to the vault.
 10. Add user analytics for user (done)
 11. Improved mark down functionality in the chat window
+12. OpenAI Embedding Fallback

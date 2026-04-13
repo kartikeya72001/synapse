@@ -34,7 +34,25 @@ bool isSocialMediaUrl(String url) {
       host.contains('tiktok.com') ||
       host.contains('threads.net') ||
       host.contains('twitter.com') ||
-      host.contains('x.com');
+      host.contains('x.com') ||
+      host.contains('youtube.com') ||
+      host.contains('youtu.be') ||
+      host.contains('linkedin.com');
+}
+
+bool isYoutubeUrl(String url) {
+  final host = Uri.tryParse(url)?.host.toLowerCase() ?? '';
+  return host.contains('youtube.com') || host.contains('youtu.be');
+}
+
+bool isTwitterUrl(String url) {
+  final host = Uri.tryParse(url)?.host.toLowerCase() ?? '';
+  return host.contains('twitter.com') || host.contains('x.com');
+}
+
+bool isLinkedInUrl(String url) {
+  final host = Uri.tryParse(url)?.host.toLowerCase() ?? '';
+  return host.contains('linkedin.com');
 }
 
 bool isInstagramUrl(String url) {

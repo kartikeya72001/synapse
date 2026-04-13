@@ -19,6 +19,7 @@ class ExportService {
     'Updated At',
     'Image Path',
     'Preview Image URL',
+    'User Notes',
   ];
 
   static String _escapeCsv(String? value) {
@@ -48,6 +49,7 @@ class ExportService {
       _escapeCsv(thought.updatedAt.toIso8601String()),
       _escapeCsv(thought.imagePath),
       _escapeCsv(thought.previewImageUrl),
+      _escapeCsv(thought.userNotes),
     ].join(',');
   }
 
@@ -154,6 +156,7 @@ class ExportService {
         final updatedStr = fields[10];
         final imagePath = fields.length > 11 ? fields[11] : '';
         final previewImageUrl = fields.length > 12 ? fields[12] : '';
+        final userNotes = fields.length > 13 ? fields[13] : '';
 
         final type = typeName == 'screenshot'
             ? ThoughtType.screenshot
@@ -198,6 +201,7 @@ class ExportService {
           isClassified: category != ThoughtCategory.other,
           imagePath: imagePath.isNotEmpty ? imagePath : null,
           previewImageUrl: previewImageUrl.isNotEmpty ? previewImageUrl : null,
+          userNotes: userNotes.isNotEmpty ? userNotes : null,
         ));
       }
 

@@ -11,7 +11,7 @@
     <application
         android:label="Synapse"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher"
+        android:icon="@mipmap/ic_launcher_new"
         android:usesCleartextTraffic="true">
         <activity
             android:name=".MainActivity"
@@ -57,7 +57,7 @@
         <service
             android:name=".SynapseQSTileService"
             android:label="Synapse Capture"
-            android:icon="@mipmap/ic_launcher"
+            android:icon="@mipmap/ic_launcher_new"
             android:exported="true"
             android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
             <intent-filter>

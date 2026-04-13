@@ -75,7 +75,7 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       floatingActionButton: _tab == 1
           ? Container(
-              decoration: BoxDecoration(
+                decoration: BoxDecoration(
                 color: SynapseColors.ink,
                 borderRadius: BorderRadius.circular(18),
               ),
@@ -120,9 +120,9 @@ class _HomeScreenState extends State<HomeScreen> {
                   builder: (_) => ThoughtDetailScreen(item: pending),
                 ),
               ),
-            ),
           ),
-        );
+        ),
+      );
       });
     }
   }
@@ -200,10 +200,10 @@ class _BottomNavState extends State<_BottomNav> {
         borderRadius: BorderRadius.circular(32),
         child: BackdropFilter(
           filter: ImageFilter.blur(sigmaX: 40, sigmaY: 40),
-          child: Container(
+        child: Container(
             padding: const EdgeInsets.symmetric(
                 vertical: 10, horizontal: horizontalPad),
-            decoration: BoxDecoration(
+          decoration: BoxDecoration(
               color: isDark
                   ? Colors.black.withValues(alpha: 0.2)
                   : Colors.white.withValues(alpha: 0.15),
@@ -245,9 +245,9 @@ class _BottomNavState extends State<_BottomNav> {
                   child: _scrollChevron(
                     icon: Icons.chevron_left_rounded,
                     visible: _canScrollLeft,
-                  ),
-                ),
-              ],
+              ),
+            ),
+          ],
             ),
           ),
         ),
@@ -264,7 +264,7 @@ class _BottomNavState extends State<_BottomNav> {
           child: Container(
             width: 22,
             height: 22,
-            decoration: BoxDecoration(
+          decoration: BoxDecoration(
               shape: BoxShape.circle,
               color: (isDark ? Colors.white : Colors.black)
                   .withValues(alpha: 0.10),

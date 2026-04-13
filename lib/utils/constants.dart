@@ -16,8 +16,10 @@ class AppConstants {
   static const String debugLogPref = 'debug_log_enabled';
   static const String autoWirePref = 'auto_wire_on_share';
   static const String geminiModelPref = 'gemini_model';
+  static const String ragPersonaPref = 'rag_persona';
 
   static const int maxFreeLlmCalls = 2;
+  static const int maxChatHistory = 50;
 
   static const bool isDebugMode = bool.fromEnvironment(
     'dart.vm.product',

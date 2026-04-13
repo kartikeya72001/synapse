@@ -157,6 +157,7 @@ class Thought {
   final DateTime createdAt;
   final DateTime updatedAt;
   final bool isClassified;
+  final String? userNotes;
 
   Thought({
     required this.id,
@@ -178,6 +179,7 @@ class Thought {
     required this.createdAt,
     required this.updatedAt,
     this.isClassified = false,
+    this.userNotes,
   });
 
   Map<String, dynamic> toMap() {
@@ -201,6 +203,7 @@ class Thought {
       'createdAt': createdAt.toIso8601String(),
       'updatedAt': updatedAt.toIso8601String(),
       'isClassified': isClassified ? 1 : 0,
+      'userNotes': userNotes,
     };
   }
 
@@ -225,6 +228,7 @@ class Thought {
       createdAt: DateTime.parse(map['createdAt'] as String),
       updatedAt: DateTime.parse(map['updatedAt'] as String),
       isClassified: (map['isClassified'] as int?) == 1,
+      userNotes: map['userNotes'] as String?,
     );
   }
 
@@ -248,6 +252,7 @@ class Thought {
     DateTime? createdAt,
     DateTime? updatedAt,
     bool? isClassified,
+    String? userNotes,
   }) {
     return Thought(
       id: id ?? this.id,
@@ -269,6 +274,7 @@ class Thought {
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       isClassified: isClassified ?? this.isClassified,
+      userNotes: userNotes ?? this.userNotes,
     );
   }
 

@@ -1,6 +1,8 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'package:sentry_flutter/sentry_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'providers/synapse_provider.dart';
 import 'screens/home_screen.dart';
@@ -11,7 +13,7 @@ import 'theme/app_theme.dart';
 import 'utils/constants.dart';
 import 'utils/permissions.dart';
 
-void main() {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
     statusBarColor: Colors.transparent,
@@ -19,7 +21,20 @@ void main() {
     systemNavigationBarColor: Colors.transparent,
   ));
   SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
-  runApp(const SynapseApp());
+
+  await SentryFlutter.init(
+    (options) {
+      options.dsn = const String.fromEnvironment(
+        'SENTRY_DSN',
+        defaultValue: '',
+      );
+      options.tracesSampleRate = 0.2;
+      options.enableAutoPerformanceTracing = true;
+      options.attachScreenshot = true;
+      options.environment = AppConstants.isDebugMode ? 'debug' : 'production';
+    },
+    appRunner: () => runApp(const SynapseApp()),
+  );
 }
 
 class SynapseApp extends StatefulWidget {

@@ -276,9 +276,101 @@ class VectorSearchService {
     return results;
   }
 
+  // ── Semantic Tree / Hierarchical Index ──
+
+  /// Builds a category → thoughtIds index from all thoughts and computes
+  /// a centroid vector per category for coarse-grained filtering.
+  Future<Map<String, CategoryNode>> buildSemanticTree(
+      List<Thought> allThoughts) async {
+    final embeddings = await _getCachedEmbeddings();
+    final tree = <String, CategoryNode>{};
+
+    for (final thought in allThoughts) {
+      final cat = thought.category.name;
+      tree.putIfAbsent(cat, () => CategoryNode(cat));
+      tree[cat]!.thoughtIds.add(thought.id);
+
+      final chunks = embeddings[thought.id];
+      if (chunks != null) {
+        for (final vec in chunks) {
+          tree[cat]!.vectors.add(vec);
+        }
+      }
+    }
+
+    for (final node in tree.values) {
+      node.computeCentroid();
+    }
+
+    _dbg.log('VEC', 'semantic tree built: ${tree.length} categories');
+    return tree;
+  }
+
+  /// Two-phase search: first rank categories by centroid similarity,
+  /// then do fine-grained chunk search only within top categories.
+  Future<List<ScoredThought>> hierarchicalSearch(
+    String query,
+    List<Thought> allThoughts, {
+    int topK = defaultTopK,
+    int maxCategories = 3,
+  }) async {
+    final queryVector = await _embedding.embedQuery(query);
+    if (queryVector == null) return [];
+
+    final tree = await buildSemanticTree(allThoughts);
+    if (tree.isEmpty) return search(query, allThoughts, topK: topK);
+
+    // Phase 1: rank categories by centroid similarity
+    final catScores = <String, double>{};
+    for (final entry in tree.entries) {
+      if (entry.value.centroid == null) continue;
+      catScores[entry.key] =
+          EmbeddingService.cosineSimilarity(queryVector, entry.value.centroid!);
+    }
+
+    final rankedCats = catScores.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+
+    final selectedCats = rankedCats.take(maxCategories).map((e) => e.key).toSet();
+    _dbg.log('VEC', 'hierarchical search: top categories = $selectedCats');
+
+    // Phase 2: fine-grained search within selected categories
+    final relevantIds = <String>{};
+    for (final cat in selectedCats) {
+      relevantIds.addAll(tree[cat]!.thoughtIds);
+    }
+
+    final filteredThoughts =
+        allThoughts.where((t) => relevantIds.contains(t.id)).toList();
+
+    return search(query, filteredThoughts, topK: topK);
+  }
+
   // ── Helpers ──
 
   static String _textHash(String text) {
     return md5.convert(utf8.encode(text)).toString();
+  }
+}
+
+class CategoryNode {
+  final String category;
+  final List<String> thoughtIds = [];
+  final List<List<double>> vectors = [];
+  List<double>? centroid;
+
+  CategoryNode(this.category);
+
+  void computeCentroid() {
+    if (vectors.isEmpty) return;
+    final dim = vectors.first.length;
+    final sum = List<double>.filled(dim, 0.0);
+    for (final vec in vectors) {
+      for (int i = 0; i < dim; i++) {
+        sum[i] += vec[i];
+      }
+    }
+    final n = vectors.length.toDouble();
+    centroid = [for (int i = 0; i < dim; i++) sum[i] / n];
   }
 }

@@ -46,7 +46,7 @@ class DatabaseService {
 
     return await openDatabase(
       path,
-      version: 7,
+      version: 8,
       onCreate: (db, version) async {
         await db.execute('''
           CREATE TABLE $_tableName (
@@ -68,7 +68,8 @@ class DatabaseService {
             tags TEXT,
             createdAt TEXT NOT NULL,
             updatedAt TEXT NOT NULL,
-            isClassified INTEGER DEFAULT 0
+            isClassified INTEGER DEFAULT 0,
+            userNotes TEXT
           )
         ''');
         await db.execute('''
@@ -150,6 +151,11 @@ class DatabaseService {
         if (oldVersion < 7) {
           await db.execute('DROP TABLE IF EXISTS $_embeddingsTable');
           await db.execute(_createEmbeddingsTableSql);
+        }
+        if (oldVersion < 8) {
+          try {
+            await db.execute('ALTER TABLE $_tableName ADD COLUMN userNotes TEXT');
+          } catch (_) {}
         }
       },
     );
@@ -258,6 +264,18 @@ class DatabaseService {
   Future<void> clearChatMessages() async {
     final db = await database;
     await db.delete(_chatTable);
+  }
+
+  Future<void> trimChatMessages(int maxCount) async {
+    final db = await database;
+    final count = Sqflite.firstIntValue(
+        await db.rawQuery('SELECT COUNT(*) FROM $_chatTable'));
+    if (count == null || count <= maxCount) return;
+    await db.rawDelete('''
+      DELETE FROM $_chatTable WHERE id NOT IN (
+        SELECT id FROM $_chatTable ORDER BY timestamp DESC LIMIT ?
+      )
+    ''', [maxCount]);
   }
 
   // ── Embeddings (chunk-level) ──

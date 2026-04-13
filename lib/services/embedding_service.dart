@@ -43,6 +43,9 @@ class EmbeddingService {
     if (thought.ocrText != null && thought.ocrText!.isNotEmpty) {
       parts.add(thought.ocrText!);
     }
+    if (thought.userNotes != null && thought.userNotes!.isNotEmpty) {
+      parts.add('User notes: ${thought.userNotes!}');
+    }
     if (thought.tags.isNotEmpty) {
       parts.add('Tags: ${thought.tags.join(", ")}');
     }

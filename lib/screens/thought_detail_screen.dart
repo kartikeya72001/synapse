@@ -5,12 +5,14 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:provider/provider.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:timeago/timeago.dart' as timeago;
 import '../theme/app_theme.dart';
 import '../models/thought.dart';
 import '../models/thought_group.dart';
 import '../providers/synapse_provider.dart';
+import '../services/secret_service.dart';
 import 'group_detail_screen.dart';
 
 class ThoughtDetailScreen extends StatefulWidget {
@@ -224,6 +226,8 @@ class _ThoughtDetailScreenState extends State<ThoughtDetailScreen>
                 ],
                 const SizedBox(height: 20),
                 _buildTagsSection(item, theme, colorScheme),
+                const SizedBox(height: 16),
+                _buildUserNotesSection(item, theme, colorScheme),
                 if (item.isLinkDead) ...[
                   const SizedBox(height: 16),
                   Container(
@@ -1042,6 +1046,163 @@ class _ThoughtDetailScreenState extends State<ThoughtDetailScreen>
     );
   }
 
+  Widget _buildUserNotesSection(
+    Thought item,
+    ThemeData theme,
+    ColorScheme colorScheme,
+  ) {
+    final isDark = theme.brightness == Brightness.dark;
+    final hasNotes = item.userNotes != null && item.userNotes!.isNotEmpty;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: isDark
+            ? Colors.white.withValues(alpha: 0.04)
+            : SynapseColors.lavenderLight.withValues(alpha: 0.5),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: SynapseColors.accent.withValues(alpha: 0.15),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.edit_note_rounded,
+                  size: 18, color: SynapseColors.accent),
+              const SizedBox(width: 8),
+              Text(
+                'My Notes',
+                style: GoogleFonts.spaceGrotesk(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: SynapseColors.accent,
+                ),
+              ),
+              const Spacer(),
+              GestureDetector(
+                onTap: () => _editUserNotes(item),
+                child: Icon(
+                  hasNotes ? Icons.edit_rounded : Icons.add_rounded,
+                  size: 18,
+                  color: colorScheme.onSurface.withValues(alpha: 0.4),
+                ),
+              ),
+            ],
+          ),
+          if (hasNotes) ...[
+            const SizedBox(height: 10),
+            Text(
+              item.userNotes!,
+              style: GoogleFonts.spaceGrotesk(
+                fontSize: 13,
+                height: 1.5,
+                color: colorScheme.onSurface.withValues(alpha: 0.8),
+              ),
+            ),
+          ] else ...[
+            const SizedBox(height: 8),
+            GestureDetector(
+              onTap: () => _editUserNotes(item),
+              child: Text(
+                'Tap to add personal notes...',
+                style: GoogleFonts.spaceGrotesk(
+                  fontSize: 13,
+                  color: colorScheme.onSurface.withValues(alpha: 0.3),
+                  fontStyle: FontStyle.italic,
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  void _editUserNotes(Thought item) {
+    final controller = TextEditingController(text: item.userNotes ?? '');
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) => Padding(
+        padding: EdgeInsets.fromLTRB(
+            20, 16, 20, MediaQuery.of(ctx).viewInsets.bottom + 20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 36,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: (isDark ? Colors.white : Colors.black)
+                      .withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'My Notes',
+              style: GoogleFonts.spaceGrotesk(
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: controller,
+              maxLines: 6,
+              minLines: 3,
+              autofocus: true,
+              decoration: InputDecoration(
+                hintText: 'Add your personal notes here...',
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+              ),
+            ),
+            const SizedBox(height: 14),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('Cancel'),
+                ),
+                const SizedBox(width: 8),
+                FilledButton(
+                  onPressed: () {
+                    final provider = context.read<SynapseProvider>();
+                    provider.updateUserNotes(item.id, controller.text.trim());
+                    final idx = _allItems.indexWhere((t) => t.id == item.id);
+                    if (idx != -1) {
+                      _allItems[idx] = _allItems[idx].copyWith(
+                        userNotes: controller.text.trim(),
+                      );
+                    }
+                    Navigator.pop(ctx);
+                    setState(() {});
+                  },
+                  child: const Text('Save'),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   bool _shouldShowDescription(Thought item) {
     if (item.description == null || item.description!.isEmpty) return false;
     // Skip if description is effectively the same as the title
@@ -1418,11 +1579,18 @@ class _ThoughtDetailScreenState extends State<ThoughtDetailScreen>
                 Navigator.pop(ctx);
                 _showAddToGroupSheet(item);
               }),
-              _actionTile(ctx, Icons.share_rounded, 'Share', SynapseColors.skyBlue, () {
+              _actionTile(ctx, Icons.share_rounded, 'Share',
+                  SynapseColors.skyBlue, () {
                 Navigator.pop(ctx);
-                if (item.url != null) _launchUrl(item.url!);
+                _shareThought(item);
               }),
-              _actionTile(ctx, Icons.delete_rounded, 'Delete', SynapseColors.error, () {
+              _actionTile(ctx, Icons.shield_rounded, 'Move to Vault',
+                  const Color(0xFFD32F2F), () {
+                Navigator.pop(ctx);
+                _moveToVault(item);
+              }),
+              _actionTile(ctx, Icons.delete_rounded, 'Delete',
+                  SynapseColors.error, () {
                 Navigator.pop(ctx);
                 _handleMenuAction('delete', item);
               }),
@@ -1459,6 +1627,69 @@ class _ThoughtDetailScreenState extends State<ThoughtDetailScreen>
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       onTap: onTap,
     );
+  }
+
+  void _shareThought(Thought item) {
+    final parts = <String>[];
+    if (item.title != null) parts.add(item.title!);
+    if (item.llmSummary != null && item.llmSummary!.isNotEmpty) {
+      parts.add(item.llmSummary!);
+    } else if (item.description != null && item.description!.isNotEmpty) {
+      parts.add(item.description!);
+    }
+    if (item.url != null) parts.add(item.url!);
+    if (parts.isEmpty) parts.add(item.displayTitle);
+    SharePlus.instance.share(ShareParams(text: parts.join('\n\n')));
+  }
+
+  Future<void> _moveToVault(Thought item) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Move to Vault?'),
+        content: const Text(
+          'This will encrypt the memory and move it to your vault. '
+          'It will be removed from the library and search index.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Move'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    final vault = SecretService();
+    final sb = StringBuffer();
+    if (item.title != null) sb.writeln('Title: ${item.title}');
+    if (item.url != null) sb.writeln('URL: ${item.url}');
+    if (item.description != null) sb.writeln('Description: ${item.description}');
+    if (item.llmSummary != null) sb.writeln('Summary: ${item.llmSummary}');
+    if (item.extractedInfo != null) sb.writeln('Details: ${item.extractedInfo}');
+    if (item.userNotes != null) sb.writeln('Notes: ${item.userNotes}');
+    if (item.tags.isNotEmpty) sb.writeln('Tags: ${item.tags.join(", ")}');
+
+    await vault.addSecret(
+      title: item.displayTitle,
+      description: 'Moved from memories on ${DateTime.now().toString().substring(0, 10)}',
+      value: sb.toString(),
+    );
+
+    if (!mounted) return;
+    final provider = context.read<SynapseProvider>();
+    await provider.deleteThought(item.id);
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Memory moved to vault')),
+    );
+    Navigator.of(context).pop();
   }
 
   void _handleMenuAction(String action, Thought item) {

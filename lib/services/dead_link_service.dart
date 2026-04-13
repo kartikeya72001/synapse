@@ -25,17 +25,10 @@ class DeadLinkService {
   }
 
   List<String> _getUrlsFromThought(Thought thought) {
-    final urls = <String>[];
     if (thought.url != null && thought.url!.isNotEmpty) {
-      urls.add(thought.url!);
+      return [thought.url!];
     }
-    urls.addAll(_extractUrls(thought.description));
-    urls.addAll(_extractUrls(thought.title));
-    urls.addAll(_extractUrls(thought.extractedInfo));
-    urls.addAll(_extractUrls(thought.llmSummary));
-    urls.addAll(_extractUrls(thought.cachedText));
-    urls.addAll(_extractUrls(thought.ocrText));
-    return urls;
+    return [];
   }
 
   Future<List<DeadLinkResult>> checkLinks(List<Thought> thoughts) async {
@@ -50,15 +43,23 @@ class DeadLinkService {
 
       for (final url in urls) {
         try {
-          final response = await http.head(Uri.parse(url)).timeout(_timeout);
+          var uri = Uri.parse(url);
+          var response = await http.head(uri).timeout(_timeout);
+          
+          // Some servers block HEAD requests, retry with GET
+          if (response.statusCode == 405 || response.statusCode == 403 || response.statusCode == 500) {
+            response = await http.get(uri).timeout(_timeout);
+          }
+          
           statusCode = response.statusCode;
           if (response.statusCode == 404 || response.statusCode == 410) {
             isDead = true;
             break;
           }
         } catch (_) {
-          isDead = true;
-          break;
+          // Do not aggressively mark as dead on network errors, timeouts, or bot protection blocks
+          // A link should only be considered dead if it definitively returns 404 or 410
+          isDead = false;
         }
       }
 
