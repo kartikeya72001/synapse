@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
@@ -44,6 +46,7 @@ class _HomeScreenState extends State<HomeScreen> {
         _handlePendingShare(provider);
 
         return Scaffold(
+          extendBody: true,
           body: IndexedStack(
             index: _tab,
             children: [
@@ -143,21 +146,31 @@ class _BottomNav extends StatelessWidget {
     final bottomPad = MediaQuery.of(context).padding.bottom;
 
     return Container(
-      padding: EdgeInsets.only(bottom: bottomPad, top: 6),
-      decoration: BoxDecoration(
-        color: isDark ? SynapseColors.darkSurface : Colors.white,
-        border: Border(
-          top: BorderSide(
-            color: (isDark ? Colors.white : Colors.black)
-                .withValues(alpha: 0.05),
+      margin: EdgeInsets.fromLTRB(16, 0, 16, bottomPad + 10),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(32),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 40, sigmaY: 40),
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
+            decoration: BoxDecoration(
+              color: isDark
+                  ? Colors.black.withValues(alpha: 0.2)
+                  : Colors.white.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(32),
+              border: Border.all(
+                color: (isDark ? Colors.white : Colors.black)
+                    .withValues(alpha: 0.08),
+              ),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: List.generate(
+                _HomeScreenState._navItems.length,
+                (i) => _buildNavItem(i),
+              ),
+            ),
           ),
-        ),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-        children: List.generate(
-          _HomeScreenState._navItems.length,
-          (i) => _buildNavItem(i),
         ),
       ),
     );
@@ -176,20 +189,20 @@ class _BottomNav extends StatelessWidget {
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 250),
         curve: Curves.easeOutCubic,
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(
               isActive ? item.filledIcon : item.outlinedIcon,
-              size: 22,
+              size: 20,
               color: isActive ? activeColor : inactiveColor,
             ),
             const SizedBox(height: 3),
             Text(
               item.label,
-              style: GoogleFonts.dmSans(
-                fontSize: 10,
+              style: GoogleFonts.spaceGrotesk(
+                fontSize: 9,
                 fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
                 color: isActive ? activeColor : inactiveColor,
               ),

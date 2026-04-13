@@ -255,6 +255,15 @@ class SynapseProvider extends ChangeNotifier {
         'hasSummary=${thought.llmSummary != null} '
         'hasExtracted=${thought.extractedInfo != null}');
     _vectorSearch.indexThought(thought);
+
+    if (fromShare && isNew) {
+      final prefs2 = await SharedPreferences.getInstance();
+      final autoWire = prefs2.getBool(AppConstants.autoWirePref) ?? true;
+      if (autoWire && !thought.isClassified) {
+        _dbg.log('AUTO-WIRE', 'Auto-wiring "${thought.displayTitle}"');
+        classifyThought(thought);
+      }
+    }
   }
 
   /// Re-inserts a previously deleted thought back into the database and lists.

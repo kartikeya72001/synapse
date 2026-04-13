@@ -33,7 +33,7 @@ class _AddThoughtScreenState extends State<AddThoughtScreen> {
       appBar: AppBar(
         title: Text(
           'New Memory',
-          style: GoogleFonts.fraunces(
+          style: GoogleFonts.spaceGrotesk(
             fontSize: 18,
             fontWeight: FontWeight.w600,
             color: theme.appBarTheme.foregroundColor ?? colorScheme.onSurface,
@@ -125,7 +125,7 @@ class _AddThoughtScreenState extends State<AddThoughtScreen> {
       children: [
         Text(
           'Feed a link',
-          style: GoogleFonts.fraunces(
+          style: GoogleFonts.spaceGrotesk(
             fontSize: 24,
             fontWeight: FontWeight.w800,
             color: colorScheme.onSurface,
@@ -192,7 +192,7 @@ class _AddThoughtScreenState extends State<AddThoughtScreen> {
       children: [
         Text(
           'Capture a memory',
-          style: GoogleFonts.fraunces(
+          style: GoogleFonts.spaceGrotesk(
             fontSize: 24,
             fontWeight: FontWeight.w800,
             color: colorScheme.onSurface,

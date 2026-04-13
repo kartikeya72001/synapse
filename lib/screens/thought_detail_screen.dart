@@ -29,10 +29,12 @@ class ThoughtDetailScreen extends StatefulWidget {
   State<ThoughtDetailScreen> createState() => _ThoughtDetailScreenState();
 }
 
-class _ThoughtDetailScreenState extends State<ThoughtDetailScreen> {
+class _ThoughtDetailScreenState extends State<ThoughtDetailScreen>
+    with TickerProviderStateMixin {
   late PageController _pageController;
   late List<Thought> _allItems;
   late int _currentIndex;
+  late AnimationController _wireShimmer;
   bool _isClassifying = false;
   bool _descriptionExpanded = false;
   bool _markdownExpanded = false;
@@ -45,6 +47,10 @@ class _ThoughtDetailScreenState extends State<ThoughtDetailScreen> {
   @override
   void initState() {
     super.initState();
+    _wireShimmer = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2000),
+    )..repeat();
     _allItems = widget.allItems ?? [widget.item];
     _currentIndex = widget.initialIndex ??
         _allItems.indexWhere((i) => i.id == widget.item.id).clamp(0, _allItems.length - 1);
@@ -80,6 +86,7 @@ class _ThoughtDetailScreenState extends State<ThoughtDetailScreen> {
   @override
   void dispose() {
     _indicatorTimer?.cancel();
+    _wireShimmer.dispose();
     _pageController.dispose();
     super.dispose();
   }
@@ -129,11 +136,24 @@ class _ThoughtDetailScreenState extends State<ThoughtDetailScreen> {
   }
 
   Widget _buildThoughtPage(Thought item) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
 
-    return CustomScrollView(
-      slivers: [
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: isDark
+              ? [const Color(0xFF0E0A18), const Color(0xFF000000)]
+              : [const Color(0xFFF3EDFF), Colors.white],
+          stops: const [0.0, 0.4],
+        ),
+      ),
+      child: CustomScrollView(
+        slivers: [
         _buildAppBar(item, colorScheme),
         SliverToBoxAdapter(
           child: Padding(
@@ -145,7 +165,7 @@ class _ThoughtDetailScreenState extends State<ThoughtDetailScreen> {
                 const SizedBox(height: 16),
                 Text(
                   item.displayTitle,
-                  style: GoogleFonts.fraunces(
+                  style: GoogleFonts.spaceGrotesk(
                     textStyle: theme.textTheme.headlineMedium,
                     fontWeight: FontWeight.w800,
                     letterSpacing: -0.5,
@@ -219,13 +239,14 @@ class _ThoughtDetailScreenState extends State<ThoughtDetailScreen> {
                   ),
                 ],
                 const SizedBox(height: 24),
-                _buildActions(item, colorScheme),
+                _buildActions(item),
                 const SizedBox(height: 40),
               ],
             ),
           ),
         ),
       ],
+      ),
     );
   }
 
@@ -383,42 +404,10 @@ class _ThoughtDetailScreenState extends State<ThoughtDetailScreen> {
             color: Colors.black.withValues(alpha: hasHeroImage ? 0.3 : 0),
             shape: BoxShape.circle,
           ),
-          child: PopupMenuButton<String>(
-            icon: Icon(Icons.more_vert_rounded,
+          child: IconButton(
+            icon: Icon(Icons.more_horiz_rounded,
                 color: hasHeroImage ? Colors.white : colorScheme.onSurface),
-            onSelected: (value) => _handleMenuAction(value, item),
-            itemBuilder: (context) => [
-              const PopupMenuItem(
-                value: 'group',
-                child: Row(
-                  children: [
-                    Icon(Icons.folder_rounded),
-                    SizedBox(width: 12),
-                    Text('Wire to Cluster'),
-                  ],
-                ),
-              ),
-              const PopupMenuItem(
-                value: 'share',
-                child: Row(
-                  children: [
-                    Icon(Icons.share_rounded),
-                    SizedBox(width: 12),
-                    Text('Share'),
-                  ],
-                ),
-              ),
-              const PopupMenuItem(
-                value: 'delete',
-                child: Row(
-                  children: [
-                    Icon(Icons.delete_rounded, color: Colors.red),
-                    SizedBox(width: 12),
-                    Text('Delete', style: TextStyle(color: Colors.red)),
-                  ],
-                ),
-              ),
-            ],
+            onPressed: () => _showActionsSheet(item),
           ),
         ),
       ],
@@ -444,24 +433,6 @@ class _ThoughtDetailScreenState extends State<ThoughtDetailScreen> {
                       child: Icon(Icons.broken_image_rounded,
                           size: 40,
                           color: colorScheme.onSurface.withValues(alpha: 0.2)),
-                    ),
-                  ),
-                  Positioned.fill(
-                    child: Align(
-                      alignment: Alignment.bottomCenter,
-                      child: FractionallySizedBox(
-                        heightFactor: 0.5,
-                        widthFactor: 1,
-                        alignment: Alignment.bottomCenter,
-                        child: DecoratedBox(
-                          decoration: BoxDecoration(
-                            gradient: SynapseGradients.imageOverlay(
-                              dark: Theme.of(context).brightness ==
-                                  Brightness.dark,
-                            ),
-                          ),
-                        ),
-                      ),
                     ),
                   ),
                 ],
@@ -755,9 +726,17 @@ class _ThoughtDetailScreenState extends State<ThoughtDetailScreen> {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(14),
-      decoration: SynapseDecoration.card(dark: isDark).copyWith(
-        border: const Border(
-          left: BorderSide(color: SynapseColors.accent, width: 3),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: isDark
+              ? [SynapseColors.darkCard, SynapseColors.darkElevated]
+              : [Colors.white, const Color(0xFFF5F0FF)],
+        ),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: (isDark ? Colors.white : SynapseColors.accent).withValues(alpha: 0.08),
         ),
       ),
       child: Column(
@@ -949,9 +928,17 @@ class _ThoughtDetailScreenState extends State<ThoughtDetailScreen> {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(14),
-      decoration: SynapseDecoration.card(dark: isDark).copyWith(
-        border: const Border(
-          left: BorderSide(color: SynapseColors.accent, width: 3),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: isDark
+              ? [SynapseColors.darkCard, SynapseColors.darkElevated]
+              : [Colors.white, const Color(0xFFF8F5FF)],
+        ),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: (isDark ? Colors.white : SynapseColors.accent).withValues(alpha: 0.08),
         ),
       ),
       child: Column(
@@ -1075,9 +1062,17 @@ class _ThoughtDetailScreenState extends State<ThoughtDetailScreen> {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(14),
-      decoration: SynapseDecoration.card(dark: isDark).copyWith(
-        border: const Border(
-          left: BorderSide(color: SynapseColors.accent, width: 3),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: isDark
+              ? [SynapseColors.darkCard, const Color(0xFF1E1A2E)]
+              : [Colors.white, const Color(0xFFF0EAFC)],
+        ),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: (isDark ? Colors.white : SynapseColors.accent).withValues(alpha: 0.08),
         ),
       ),
       child: Column(
@@ -1085,10 +1080,13 @@ class _ThoughtDetailScreenState extends State<ThoughtDetailScreen> {
         children: [
           Row(
             children: [
-              Icon(
-                Icons.auto_awesome_rounded,
-                size: 18,
-                color: colorScheme.primary,
+              Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  gradient: SynapseGradients.accent,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(Icons.auto_awesome_rounded, size: 14, color: Colors.white),
               ),
               const SizedBox(width: 8),
               Text(
@@ -1142,68 +1140,125 @@ class _ThoughtDetailScreenState extends State<ThoughtDetailScreen> {
     );
   }
 
-  Widget _buildActions(Thought item, ColorScheme colorScheme) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
+  Widget _buildActions(Thought item) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Row(
       children: [
         if (item.url != null && item.url!.isNotEmpty)
-          Opacity(
-            opacity: _isClassifying ? 0.45 : 1,
-            child: Material(
-              type: MaterialType.transparency,
-              child: InkWell(
-                onTap: _isClassifying ? null : () => _launchUrl(item.url!),
-                borderRadius: BorderRadius.circular(14),
-                child: Ink(
-                  decoration: BoxDecoration(
-                    color: SynapseColors.ink,
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: const SizedBox(
-                    height: 48,
-                    width: double.infinity,
+          Expanded(
+            child: GestureDetector(
+              onTap: _isClassifying ? null : () => _launchUrl(item.url!),
+              child: Container(
+                height: 48,
+                decoration: BoxDecoration(
+                  color: isDark ? SynapseColors.darkCard : SynapseColors.ink,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.open_in_new_rounded,
+                      size: 16,
+                      color: isDark ? SynapseColors.darkInk : Colors.white,
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      'Open Link',
+                      style: GoogleFonts.spaceGrotesk(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: isDark ? SynapseColors.darkInk : Colors.white,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        if (item.url != null && item.url!.isNotEmpty) const SizedBox(width: 10),
+        Expanded(
+          child: GestureDetector(
+            onTap: _isClassifying ? null : () => _classify(item),
+            child: _isClassifying
+                ? AnimatedBuilder(
+                    animation: _wireShimmer,
+                    builder: (context, child) {
+                      final dx = _wireShimmer.value * 2 - 0.5;
+                      return Container(
+                        height: 48,
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment(dx - 0.5, 0),
+                            end: Alignment(dx + 0.5, 0),
+                            colors: const [
+                              Color(0xFF8B5BD8),
+                              Color(0xFFBF9EF7),
+                              Color(0xFFA371F2),
+                              Color(0xFF8B5BD8),
+                            ],
+                            stops: const [0.0, 0.35, 0.65, 1.0],
+                          ),
+                          borderRadius: BorderRadius.circular(14),
+                          boxShadow: [
+                            BoxShadow(
+                              color: SynapseColors.accent.withValues(alpha: 0.25),
+                              blurRadius: 12,
+                              spreadRadius: 1,
+                            ),
+                          ],
+                        ),
+                        child: child,
+                      );
+                    },
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.open_in_new_rounded, size: 18, color: Colors.white),
-                        SizedBox(width: 8),
-                        Text(
-                          'Open Link',
-                          style: TextStyle(
+                        const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
                             color: Colors.white,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          'Wiring...',
+                          style: GoogleFonts.spaceGrotesk(
+                            fontSize: 13,
                             fontWeight: FontWeight.w600,
-                            fontSize: 15,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
+                : Container(
+                    height: 48,
+                    decoration: BoxDecoration(
+                      color: isDark ? SynapseColors.darkLavender : SynapseColors.lavenderLight,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(
+                        color: SynapseColors.accent.withValues(alpha: 0.2),
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.auto_awesome_rounded, size: 16, color: SynapseColors.accent),
+                        const SizedBox(width: 6),
+                        Text(
+                          'Wire',
+                          style: GoogleFonts.spaceGrotesk(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: SynapseColors.accent,
                           ),
                         ),
                       ],
                     ),
                   ),
-                ),
-              ),
-            ),
-          ),
-        if (item.url != null && item.url!.isNotEmpty) const SizedBox(height: 12),
-        OutlinedButton.icon(
-          onPressed: _isClassifying ? null : () => _classify(item),
-          icon: _isClassifying
-              ? const SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: SynapseColors.accent,
-                  ),
-                )
-              : const Icon(Icons.auto_awesome_rounded, size: 20, color: SynapseColors.accent),
-          label: Text(
-            _isClassifying ? 'Wiring...' : 'Wire this synapse',
-            style: const TextStyle(color: SynapseColors.accent),
-          ),
-          style: OutlinedButton.styleFrom(
-            padding: const EdgeInsets.symmetric(vertical: 14),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-            side: const BorderSide(color: SynapseColors.accent, width: 1.5),
-            foregroundColor: SynapseColors.accent,
           ),
         ),
       ],
@@ -1250,6 +1305,76 @@ class _ThoughtDetailScreenState extends State<ThoughtDetailScreen> {
         );
       }
     }
+  }
+
+  void _showActionsSheet(Thought item) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 36,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: (isDark ? Colors.white : Colors.black).withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 16),
+              _actionTile(ctx, Icons.folder_rounded, 'Wire to Cluster',
+                  SynapseColors.accent, () {
+                Navigator.pop(ctx);
+                _showAddToGroupSheet(item);
+              }),
+              _actionTile(ctx, Icons.share_rounded, 'Share', SynapseColors.skyBlue, () {
+                Navigator.pop(ctx);
+                if (item.url != null) _launchUrl(item.url!);
+              }),
+              _actionTile(ctx, Icons.delete_rounded, 'Delete', SynapseColors.error, () {
+                Navigator.pop(ctx);
+                _handleMenuAction('delete', item);
+              }),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _actionTile(
+    BuildContext ctx,
+    IconData icon,
+    String label,
+    Color color,
+    VoidCallback onTap,
+  ) {
+    return ListTile(
+      leading: Container(
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Icon(icon, size: 20, color: color),
+      ),
+      title: Text(
+        label,
+        style: GoogleFonts.spaceGrotesk(
+          fontSize: 15,
+          fontWeight: FontWeight.w500,
+        ),
+      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      onTap: onTap,
+    );
   }
 
   void _handleMenuAction(String action, Thought item) {

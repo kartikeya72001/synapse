@@ -13,8 +13,14 @@ enum LlmProvider { gemini, openai }
 class LlmService {
   final _dbg = DebugLogger.instance;
 
-  static const _geminiBaseUrl =
-      'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite-preview:generateContent';
+  static const _defaultModel = 'gemini-2.5-flash';
+
+  Future<String> _getGeminiUrl() async {
+    final prefs = await SharedPreferences.getInstance();
+    final model = prefs.getString(AppConstants.geminiModelPref) ?? _defaultModel;
+    return 'https://generativelanguage.googleapis.com/v1beta/models/$model:generateContent';
+  }
+
   static const _openaiBaseUrl = 'https://api.openai.com/v1/chat/completions';
 
   String? _lastError;
@@ -283,7 +289,8 @@ VISUAL: <brief description of what is shown>''';
     String base64Data,
     String mimeType,
   ) async {
-    final url = '$_geminiBaseUrl?key=$apiKey';
+    final geminiBaseUrl = await _getGeminiUrl();
+    final url = '$geminiBaseUrl?key=$apiKey';
     final body = jsonEncode({
       'contents': [
         {
@@ -691,7 +698,8 @@ Do NOT include "=== ITEM ===" headers.''';
   }
 
   Future<String?> _callGeminiRaw(String apiKey, String prompt, {int? maxTokens}) async {
-    final url = '$_geminiBaseUrl?key=$apiKey';
+    final geminiBaseUrl = await _getGeminiUrl();
+    final url = '$geminiBaseUrl?key=$apiKey';
     final tokens = maxTokens ?? 1200;
     final timeout = tokens > 2000 ? 90 : 45;
     final body = jsonEncode(_geminiBody(prompt: prompt, maxTokens: tokens));
@@ -711,7 +719,8 @@ Do NOT include "=== ITEM ===" headers.''';
     String prompt,
     String base64Image,
   ) async {
-    final url = '$_geminiBaseUrl?key=$apiKey';
+    final geminiBaseUrl = await _getGeminiUrl();
+    final url = '$geminiBaseUrl?key=$apiKey';
     final body = jsonEncode(
       _geminiBody(prompt: prompt, base64Image: base64Image, maxTokens: 3000),
     );
@@ -732,7 +741,8 @@ Do NOT include "=== ITEM ===" headers.''';
     String prompt,
     List<String> base64Images,
   ) async {
-    final url = '$_geminiBaseUrl?key=$apiKey';
+    final geminiBaseUrl = await _getGeminiUrl();
+    final url = '$geminiBaseUrl?key=$apiKey';
     final parts = <Map<String, dynamic>>[
       {'text': prompt},
     ];

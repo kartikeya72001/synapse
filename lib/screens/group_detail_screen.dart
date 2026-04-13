@@ -63,7 +63,7 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
       appBar: AppBar(
         title: Text(
           _group.name,
-          style: GoogleFonts.fraunces(
+          style: GoogleFonts.spaceGrotesk(
             fontSize: 18,
             fontWeight: FontWeight.w600,
             color: theme.appBarTheme.titleTextStyle?.color ??
@@ -213,7 +213,7 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
             const SizedBox(height: 16),
             Text(
               'No synapses in this cluster yet',
-              style: GoogleFonts.fraunces(
+              style: GoogleFonts.spaceGrotesk(
                 fontSize: theme.textTheme.titleMedium?.fontSize ?? 16,
                 fontWeight: FontWeight.w600,
                 color: colorScheme.onSurface.withValues(alpha: 0.4),

@@ -44,6 +44,15 @@ class _SecretsScreenState extends State<SecretsScreen> {
     setState(() => _isLoading = false);
   }
 
+  void _lockVault() {
+    setState(() {
+      _isAuthenticated = false;
+      _authFailed = true;
+      _secrets = [];
+      _revealedValues.clear();
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -74,7 +83,7 @@ class _SecretsScreenState extends State<SecretsScreen> {
         children: [
           Text(
             'Vault',
-            style: GoogleFonts.fraunces(
+            style: GoogleFonts.spaceGrotesk(
               fontSize: 28,
               fontWeight: FontWeight.w800,
               color: isDark ? SynapseColors.darkInk : SynapseColors.ink,
@@ -83,17 +92,35 @@ class _SecretsScreenState extends State<SecretsScreen> {
           ),
           const Spacer(),
           if (_isAuthenticated)
-            GestureDetector(
-              onTap: () => _showAddDialog(theme, colorScheme),
-              child: Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: SynapseColors.ink,
-                  borderRadius: BorderRadius.circular(10),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                GestureDetector(
+                  onTap: () => _showAddDialog(theme, colorScheme),
+                  child: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: SynapseColors.ink,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(Icons.add_rounded,
+                        size: 18, color: Colors.white),
+                  ),
                 ),
-                child: const Icon(Icons.add_rounded,
-                    size: 18, color: Colors.white),
-              ),
+                const SizedBox(width: 8),
+                GestureDetector(
+                  onTap: _lockVault,
+                  child: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: SynapseColors.error.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Icon(Icons.lock_rounded,
+                        size: 18, color: SynapseColors.error),
+                  ),
+                ),
+              ],
             ),
         ],
       ),
@@ -121,8 +148,8 @@ class _SecretsScreenState extends State<SecretsScreen> {
             ),
             const SizedBox(height: 16),
             Text(
-              _authFailed ? 'Authentication required' : 'Verifying identity...',
-              style: GoogleFonts.fraunces(
+              _authFailed ? 'Vault locked' : 'Verifying identity...',
+              style: GoogleFonts.spaceGrotesk(
                 fontSize: 20,
                 fontWeight: FontWeight.w700,
                 color: isDark ? SynapseColors.darkInk : SynapseColors.ink,
@@ -130,12 +157,13 @@ class _SecretsScreenState extends State<SecretsScreen> {
             ),
             if (_authFailed) ...[
               const SizedBox(height: 16),
-              FilledButton(
+              FilledButton.icon(
                 onPressed: () {
                   setState(() => _authFailed = false);
                   _authenticate();
                 },
-                child: const Text('Try again'),
+                icon: const Icon(Icons.fingerprint_rounded),
+                label: const Text('Unlock with biometrics'),
               ),
             ],
           ],
@@ -179,7 +207,7 @@ class _SecretsScreenState extends State<SecretsScreen> {
             const SizedBox(height: 24),
             Text(
               'Vault is sealed',
-              style: GoogleFonts.fraunces(
+              style: GoogleFonts.spaceGrotesk(
                 fontSize: 24,
                 fontWeight: FontWeight.w800,
                 color: isDark ? SynapseColors.darkInk : SynapseColors.ink,
@@ -188,7 +216,7 @@ class _SecretsScreenState extends State<SecretsScreen> {
             const SizedBox(height: 8),
             Text(
               'Store passwords, API keys, bank details,\nand other secrets deep in the vault.',
-              style: GoogleFonts.dmSans(
+              style: GoogleFonts.spaceGrotesk(
                 fontSize: 14,
                 color: SynapseColors.inkMuted,
                 height: 1.5,
@@ -198,7 +226,7 @@ class _SecretsScreenState extends State<SecretsScreen> {
             const SizedBox(height: 8),
             Text(
               'AES-256 encrypted · Biometric lock only',
-              style: GoogleFonts.dmSans(
+              style: GoogleFonts.spaceGrotesk(
                 fontSize: 11,
                 color: SynapseColors.error.withValues(alpha: 0.6),
                 fontWeight: FontWeight.w600,
@@ -257,7 +285,7 @@ class _SecretsScreenState extends State<SecretsScreen> {
                 Expanded(
                   child: Text(
                     secret.title,
-                    style: GoogleFonts.dmSans(
+                    style: GoogleFonts.spaceGrotesk(
                       fontSize: 15,
                       fontWeight: FontWeight.w600,
                       color: isDark ? SynapseColors.darkInk : SynapseColors.ink,
@@ -284,7 +312,7 @@ class _SecretsScreenState extends State<SecretsScreen> {
               padding: const EdgeInsets.fromLTRB(16, 2, 16, 0),
               child: Text(
                 secret.description!,
-                style: GoogleFonts.dmSans(fontSize: 12, color: SynapseColors.inkMuted),
+                style: GoogleFonts.spaceGrotesk(fontSize: 12, color: SynapseColors.inkMuted),
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
               ),
@@ -349,7 +377,7 @@ class _SecretsScreenState extends State<SecretsScreen> {
                 const SizedBox(width: 4),
                 Text(
                   timeago.format(secret.createdAt),
-                  style: GoogleFonts.dmSans(fontSize: 11, color: SynapseColors.inkMuted),
+                  style: GoogleFonts.spaceGrotesk(fontSize: 11, color: SynapseColors.inkMuted),
                 ),
                 const Spacer(),
                 Icon(Icons.lock_rounded, size: 12,
@@ -357,7 +385,7 @@ class _SecretsScreenState extends State<SecretsScreen> {
                 const SizedBox(width: 4),
                 Text(
                   'AES-256',
-                  style: GoogleFonts.dmSans(
+                  style: GoogleFonts.spaceGrotesk(
                     fontSize: 10,
                     color: SynapseColors.error.withValues(alpha: 0.5),
                     fontWeight: FontWeight.w600,

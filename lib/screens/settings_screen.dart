@@ -1,3 +1,5 @@
+import 'dart:io';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -30,8 +32,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _isExporting = false;
   bool _backgroundShare = false;
   bool _debugLog = false;
+  bool _autoWire = true;
+  String _selectedModel = 'gemini-2.5-flash';
 
   static const List<int?> _autoDeletePresets = [null, 7, 15, 30, 90, 180, 365];
+
+  static const _modelOptions = [
+    _ModelOption('gemini-2.5-flash', 'Gemini 2.5 Flash', 'Low', 'High'),
+    _ModelOption('gemini-2.5-pro', 'Gemini 2.5 Pro', 'Medium', 'Very High'),
+    _ModelOption('gemini-2.0-flash', 'Gemini 2.0 Flash', 'Low', 'Medium'),
+    _ModelOption('gemini-2.0-flash-lite', 'Gemini 2.0 Flash Lite', 'Very Low', 'Low'),
+  ];
 
   @override
   void initState() {
@@ -50,6 +61,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final autoDelete = prefs.getInt(AppConstants.autoDeleteDaysPref);
     final bgShare = prefs.getBool(AppConstants.backgroundSharePref) ?? false;
     final dbgLog = prefs.getBool(AppConstants.debugLogPref) ?? false;
+    final autoWire = prefs.getBool(AppConstants.autoWirePref) ?? true;
+    final selectedModel = prefs.getString(AppConstants.geminiModelPref) ?? 'gemini-2.5-flash';
 
     if (!mounted) return;
 
@@ -61,6 +74,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _autoDeleteDays = autoDelete;
       _backgroundShare = bgShare;
       _debugLog = dbgLog;
+      _autoWire = autoWire;
+      _selectedModel = selectedModel;
     });
   }
 
@@ -133,7 +148,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               padding: const EdgeInsets.fromLTRB(24, 14, 16, 10),
               child: Text(
                 'Settings',
-                style: GoogleFonts.fraunces(
+                style: GoogleFonts.spaceGrotesk(
                   fontSize: 28,
                   fontWeight: FontWeight.w800,
                   color: isDark ? SynapseColors.darkInk : SynapseColors.ink,
@@ -157,12 +172,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
           _buildBackgroundShareToggle(theme, colorScheme, isDark),
           const SizedBox(height: 12),
           _buildDebugLogToggle(theme, colorScheme, isDark),
+          const SizedBox(height: 12),
+          _buildAutoWireToggle(theme, colorScheme, isDark),
           const SizedBox(height: 32),
           _buildSectionTitle(theme, 'Neural Engine'),
           const SizedBox(height: 12),
           _buildInfoCard(theme, colorScheme, isDark),
           const SizedBox(height: 16),
           _buildProviderSelector(theme, colorScheme, isDark),
+          const SizedBox(height: 16),
+          _buildModelSelector(theme, colorScheme, isDark),
           const SizedBox(height: 20),
           _buildApiKeyField(
             theme: theme,
@@ -204,6 +223,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
           _buildGalleryImportCard(theme, colorScheme, isDark),
           const SizedBox(height: 12),
           _buildExportCsvCard(theme, colorScheme, isDark),
+          const SizedBox(height: 12),
+          _buildImportCsvCard(theme, colorScheme, isDark),
           const SizedBox(height: 32),
           _buildSectionTitle(theme, 'About'),
           const SizedBox(height: 12),
@@ -223,7 +244,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       children: [
         Text(
           title,
-          style: GoogleFonts.fraunces(
+          style: GoogleFonts.spaceGrotesk(
             fontSize: 22,
             fontWeight: FontWeight.w700,
             color: theme.colorScheme.onSurface,
@@ -322,6 +343,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Widget _buildAutoDeleteSelector(ThemeData theme, ColorScheme colorScheme, bool isDark) {
+    final currentIdx = _autoDeletePresets.indexOf(_autoDeleteDays);
+    final selectedIndex = currentIdx >= 0 ? currentIdx : 0;
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: SynapseDecoration.card(dark: isDark),
@@ -332,54 +356,62 @@ class _SettingsScreenState extends State<SettingsScreen> {
             children: [
               Icon(Icons.auto_delete_rounded, size: 20, color: SynapseColors.accent),
               const SizedBox(width: 8),
-              Text(
-                'Forget memories older than:',
-                style: theme.textTheme.titleMedium?.copyWith(fontSize: 14),
+              Expanded(
+                child: Text(
+                  'Forget memories older than:',
+                  style: theme.textTheme.titleMedium?.copyWith(fontSize: 14),
+                ),
               ),
             ],
           ),
           const SizedBox(height: 14),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: _autoDeletePresets.map((preset) {
-              final isActive = _autoDeleteDays == preset;
-              final label = preset == null ? 'Never' : '$preset days';
-              return GestureDetector(
-                onTap: () async {
-                  setState(() => _autoDeleteDays = preset);
-                  final prefs = await SharedPreferences.getInstance();
-                  if (preset == null) {
-                    await prefs.remove(AppConstants.autoDeleteDaysPref);
-                  } else {
-                    await prefs.setInt(AppConstants.autoDeleteDaysPref, preset);
-                  }
-                },
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                  decoration: BoxDecoration(
-                    color: isActive
-                        ? SynapseColors.ink
-                        : SynapseColors.ink.withValues(alpha: 0.04),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(
+          SizedBox(
+            height: 100,
+            child: ListWheelScrollView.useDelegate(
+              itemExtent: 36,
+              diameterRatio: 1.6,
+              perspective: 0.004,
+              physics: const FixedExtentScrollPhysics(),
+              controller: FixedExtentScrollController(initialItem: selectedIndex),
+              onSelectedItemChanged: (index) async {
+                final preset = _autoDeletePresets[index];
+                setState(() => _autoDeleteDays = preset);
+                final prefs = await SharedPreferences.getInstance();
+                if (preset == null) {
+                  await prefs.remove(AppConstants.autoDeleteDaysPref);
+                } else {
+                  await prefs.setInt(AppConstants.autoDeleteDaysPref, preset);
+                }
+              },
+              childDelegate: ListWheelChildBuilderDelegate(
+                childCount: _autoDeletePresets.length,
+                builder: (context, index) {
+                  final preset = _autoDeletePresets[index];
+                  final isActive = _autoDeleteDays == preset;
+                  final label = preset == null ? 'Never' : '$preset days';
+                  return Container(
+                    alignment: Alignment.center,
+                    padding: const EdgeInsets.symmetric(horizontal: 24),
+                    decoration: BoxDecoration(
                       color: isActive
-                          ? SynapseColors.ink
-                          : SynapseColors.ink.withValues(alpha: 0.06),
+                          ? (isDark ? SynapseColors.darkAccent.withValues(alpha: 0.15) : SynapseColors.accent.withValues(alpha: 0.08))
+                          : Colors.transparent,
+                      borderRadius: BorderRadius.circular(10),
                     ),
-                  ),
-                  child: Text(
-                    label,
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: isActive ? Colors.white : colorScheme.onSurface,
+                    child: Text(
+                      label,
+                      style: GoogleFonts.spaceGrotesk(
+                        fontSize: isActive ? 16 : 14,
+                        fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
+                        color: isActive
+                            ? (isDark ? SynapseColors.darkAccent : SynapseColors.accent)
+                            : (isDark ? SynapseColors.darkInkMuted : SynapseColors.inkMuted),
+                      ),
                     ),
-                  ),
-                ),
-              );
-            }).toList(),
+                  );
+                },
+              ),
+            ),
           ),
         ],
       ),
@@ -582,7 +614,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             Container(
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
-                color: SynapseColors.lavenderLight,
+                color: isDark ? SynapseColors.darkLavender : SynapseColors.lavenderLight,
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Icon(Icons.photo_library_rounded, color: SynapseColors.accent),
@@ -693,7 +725,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             Container(
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
-                color: SynapseColors.lavenderLight,
+                color: isDark ? SynapseColors.darkLavender : SynapseColors.lavenderLight,
                 borderRadius: BorderRadius.circular(12),
               ),
               child: _isExporting
@@ -728,6 +760,156 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ),
       ),
     );
+  }
+
+  Widget _buildImportCsvCard(ThemeData theme, ColorScheme colorScheme, bool isDark) {
+    return GestureDetector(
+      onTap: _importFromCsv,
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: SynapseDecoration.card(dark: isDark),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: isDark ? SynapseColors.darkLavender : SynapseColors.lavenderLight,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(Icons.upload_file_rounded,
+                  color: SynapseColors.accent),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Import Memories',
+                      style: theme.textTheme.titleMedium),
+                  const SizedBox(height: 2),
+                  Text(
+                    'Restore memories from a previously exported CSV file.',
+                    style: theme.textTheme.bodySmall,
+                  ),
+                ],
+              ),
+            ),
+            Icon(Icons.chevron_right_rounded,
+                color: colorScheme.onSurface.withValues(alpha: 0.4)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _importFromCsv() async {
+    if (!mounted) return;
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
+    final provider = context.read<SynapseProvider>();
+
+    var files = await ExportService.listAllCsvFiles();
+    if (files.isEmpty) {
+      if (!mounted) return;
+      final pickedFile = await _pickCsvManually();
+      if (pickedFile == null) return;
+      files = [pickedFile];
+    }
+
+    if (!mounted) return;
+
+    final selected = await showModalBottomSheet<File>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 36, height: 4,
+                  decoration: BoxDecoration(
+                    color: SynapseColors.ink.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text('Select export file',
+                  style: GoogleFonts.spaceGrotesk(
+                    fontSize: 18, fontWeight: FontWeight.w700,
+                  )),
+              const SizedBox(height: 12),
+              ...files.take(10).map((f) {
+                final name = f.path.split('/').last;
+                final modified = f.lastModifiedSync();
+                return ListTile(
+                  leading: Icon(Icons.description_rounded,
+                      color: SynapseColors.success),
+                  title: Text(name,
+                      style: GoogleFonts.spaceGrotesk(fontSize: 13)),
+                  subtitle: Text(
+                    '${modified.day}/${modified.month}/${modified.year}',
+                    style: GoogleFonts.spaceGrotesk(
+                        fontSize: 11, color: SynapseColors.inkMuted),
+                  ),
+                  onTap: () => Navigator.pop(ctx, f),
+                  contentPadding: EdgeInsets.zero,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                );
+              }),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    if (selected == null) return;
+    if (!mounted) return;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const _ImportLoadingDialog(),
+    );
+
+    try {
+      final thoughts = await ExportService.importFromCsv(selected);
+      if (!mounted) return;
+
+      if (thoughts.isEmpty) {
+        Navigator.of(context).pop();
+        scaffoldMessenger.showSnackBar(
+          const SnackBar(content: Text('No valid memories found in the file.')),
+        );
+        return;
+      }
+
+      int imported = 0;
+      for (final thought in thoughts) {
+        await provider.restoreThought(thought);
+        imported++;
+      }
+      await provider.loadThoughts();
+
+      if (mounted) {
+        Navigator.of(context).pop();
+        scaffoldMessenger.showSnackBar(
+          SnackBar(content: Text('Imported $imported memories successfully.')),
+        );
+      }
+    } catch (e) {
+      debugPrint('CSV import failed: $e');
+      if (mounted) {
+        Navigator.of(context).pop();
+        scaffoldMessenger.showSnackBar(
+          const SnackBar(content: Text('Import failed. Please try again.')),
+        );
+      }
+    }
   }
 
   Future<void> _exportToCsv() async {
@@ -803,7 +985,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 const SizedBox(height: 16),
                 Text(
                   'Synapse',
-                  style: GoogleFonts.fraunces(
+                  style: GoogleFonts.spaceGrotesk(
                     fontSize: 28,
                     fontWeight: FontWeight.w700,
                     color: colorScheme.onSurface,
@@ -844,6 +1026,155 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
+  Widget _buildAutoWireToggle(ThemeData theme, ColorScheme colorScheme, bool isDark) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: SynapseDecoration.card(dark: isDark),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: isDark ? SynapseColors.darkLavender : SynapseColors.lavenderLight,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(Icons.auto_fix_high_rounded, color: SynapseColors.accent),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Auto-wire on share', style: theme.textTheme.titleMedium),
+                const SizedBox(height: 2),
+                Text('Automatically classify shared content.', style: theme.textTheme.bodySmall),
+              ],
+            ),
+          ),
+          Switch.adaptive(
+            value: _autoWire,
+            activeColor: SynapseColors.accent,
+            onChanged: (val) async {
+              setState(() => _autoWire = val);
+              final prefs = await SharedPreferences.getInstance();
+              await prefs.setBool(AppConstants.autoWirePref, val);
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildModelSelector(ThemeData theme, ColorScheme colorScheme, bool isDark) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: _modelOptions.map((model) {
+        final isSelected = _selectedModel == model.id;
+        final costColor = switch (model.cost) {
+          'Very Low' => SynapseColors.success,
+          'Low' => const Color(0xFF4CAF50),
+          'Medium' => const Color(0xFFFF9800),
+          'High' => const Color(0xFFFF5722),
+          _ => SynapseColors.inkMuted,
+        };
+        final qualityColor = switch (model.quality) {
+          'Very High' => const Color(0xFF7C4DFF),
+          'High' => SynapseColors.accent,
+          'Medium' => const Color(0xFF42A5F5),
+          'Low' => SynapseColors.inkMuted,
+          _ => SynapseColors.inkMuted,
+        };
+
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: GestureDetector(
+            onTap: () async {
+              setState(() => _selectedModel = model.id);
+              final prefs = await SharedPreferences.getInstance();
+              await prefs.setString(AppConstants.geminiModelPref, model.id);
+            },
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                gradient: isSelected
+                    ? LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: isDark
+                            ? [SynapseColors.darkLavender, SynapseColors.darkCard]
+                            : [const Color(0xFFF3EDFF), Colors.white],
+                      )
+                    : null,
+                color: isSelected ? null : (isDark ? SynapseColors.darkCard : SynapseColors.lightCard),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: isSelected
+                      ? SynapseColors.accent.withValues(alpha: 0.3)
+                      : (isDark ? Colors.white : Colors.black).withValues(alpha: 0.04),
+                ),
+              ),
+              child: Row(
+                children: [
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    width: 20,
+                    height: 20,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: isSelected ? SynapseColors.accent : Colors.transparent,
+                      border: Border.all(
+                        color: isSelected ? SynapseColors.accent : SynapseColors.inkFaint,
+                        width: 2,
+                      ),
+                    ),
+                    child: isSelected
+                        ? const Icon(Icons.check_rounded, size: 12, color: Colors.white)
+                        : null,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      model.name,
+                      style: GoogleFonts.spaceGrotesk(
+                        fontSize: 14,
+                        fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
+                        color: isDark ? SynapseColors.darkInk : SynapseColors.ink,
+                      ),
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: costColor.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      model.cost,
+                      style: GoogleFonts.spaceGrotesk(fontSize: 9, fontWeight: FontWeight.w600, color: costColor),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: qualityColor.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      model.quality,
+                      style: GoogleFonts.spaceGrotesk(fontSize: 9, fontWeight: FontWeight.w600, color: qualityColor),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      }).toList(),
+    );
+  }
+
   Future<void> _saveSettings() async {
     final prefs = await SharedPreferences.getInstance();
     final oldGeminiKey = prefs.getString(AppConstants.geminiApiKeyPref) ?? '';
@@ -859,6 +1190,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
       await prefs.setInt(AppConstants.autoDeleteDaysPref, _autoDeleteDays!);
     }
 
+    await prefs.setBool(AppConstants.autoWirePref, _autoWire);
+    await prefs.setString(AppConstants.geminiModelPref, _selectedModel);
+
     if (newGeminiKey.isNotEmpty && newGeminiKey != oldGeminiKey && mounted) {
       final provider = context.read<SynapseProvider>();
       provider.reindexEmbeddings();
@@ -870,5 +1204,78 @@ class _SettingsScreenState extends State<SettingsScreen> {
         const SnackBar(content: Text('Neural config updated.')),
       );
     }
+  }
+
+  Future<File?> _pickCsvManually() async {
+    try {
+      final result = await FilePicker.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['csv'],
+        dialogTitle: 'Select CSV file',
+      );
+      if (result != null && result.files.single.path != null) {
+        return File(result.files.single.path!);
+      }
+    } catch (e) {
+      debugPrint('File picker error: $e');
+    }
+    return null;
+  }
+}
+
+class _ModelOption {
+  final String id;
+  final String name;
+  final String cost;
+  final String quality;
+  const _ModelOption(this.id, this.name, this.cost, this.quality);
+}
+
+class _ImportLoadingDialog extends StatelessWidget {
+  const _ImportLoadingDialog();
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Center(
+      child: Container(
+        width: 200,
+        padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 24),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: isDark
+                ? [SynapseColors.darkCard, const Color(0xFF1E1A2E)]
+                : [Colors.white, const Color(0xFFF3EDFF)],
+          ),
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: SynapseShadows.elevated,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SizedBox(
+              width: 36,
+              height: 36,
+              child: CircularProgressIndicator(
+                strokeWidth: 3,
+                color: SynapseColors.accent,
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Absorbing memories...',
+              style: GoogleFonts.spaceGrotesk(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: isDark ? SynapseColors.darkInk : SynapseColors.ink,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }

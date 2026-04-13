@@ -89,7 +89,7 @@ class _LibraryViewState extends State<LibraryView> {
         children: [
           Text(
             'Memories',
-            style: GoogleFonts.fraunces(
+            style: GoogleFonts.spaceGrotesk(
               fontSize: 28,
               fontWeight: FontWeight.w800,
               color: isDark ? SynapseColors.darkInk : SynapseColors.ink,
@@ -107,7 +107,7 @@ class _LibraryViewState extends State<LibraryView> {
             ),
             child: Text(
               '${provider.items.length}',
-              style: GoogleFonts.dmSans(
+              style: GoogleFonts.spaceGrotesk(
                 fontSize: 11,
                 fontWeight: FontWeight.w700,
                 color: isDark
@@ -195,7 +195,7 @@ class _LibraryViewState extends State<LibraryView> {
           const SizedBox(width: 8),
           Text(
             '${_selectedIds.length} selected',
-            style: GoogleFonts.dmSans(
+            style: GoogleFonts.spaceGrotesk(
               fontSize: 17,
               fontWeight: FontWeight.w600,
             ),
@@ -281,7 +281,7 @@ class _LibraryViewState extends State<LibraryView> {
             const SizedBox(height: 20),
             Text(
               'No matches',
-              style: GoogleFonts.fraunces(
+              style: GoogleFonts.spaceGrotesk(
                 fontSize: 20,
                 fontWeight: FontWeight.w700,
                 color: isDark
@@ -292,7 +292,7 @@ class _LibraryViewState extends State<LibraryView> {
             const SizedBox(height: 6),
             Text(
               'No memories match this filter.',
-              style: GoogleFonts.dmSans(
+              style: GoogleFonts.spaceGrotesk(
                 fontSize: 13,
                 color: SynapseColors.inkMuted,
               ),
@@ -347,7 +347,7 @@ class _LibraryViewState extends State<LibraryView> {
             const SizedBox(height: 24),
             Text(
               'Nothing here yet',
-              style: GoogleFonts.fraunces(
+              style: GoogleFonts.spaceGrotesk(
                 fontSize: 22,
                 fontWeight: FontWeight.w800,
                 color: isDark
@@ -359,7 +359,7 @@ class _LibraryViewState extends State<LibraryView> {
             const SizedBox(height: 8),
             Text(
               'Share a link or screenshot from any app\nto start building your second brain.',
-              style: GoogleFonts.dmSans(
+              style: GoogleFonts.spaceGrotesk(
                 fontSize: 14,
                 color: SynapseColors.inkMuted,
                 height: 1.5,
@@ -487,7 +487,7 @@ class _LibraryViewState extends State<LibraryView> {
               const SizedBox(width: 6),
               Text(
                 label,
-                style: GoogleFonts.dmSans(
+                style: GoogleFonts.spaceGrotesk(
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
                   color: textColor,
@@ -601,7 +601,7 @@ class _LibraryViewState extends State<LibraryView> {
           ),
           child: Text(
             label,
-            style: GoogleFonts.dmSans(
+            style: GoogleFonts.spaceGrotesk(
               fontSize: 12,
               fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
               color: isSelected ? Colors.white : SynapseColors.inkMuted,
@@ -890,7 +890,7 @@ class _LibraryViewState extends State<LibraryView> {
                 ),
                 const SizedBox(height: 16),
                 Text('Add to cluster',
-                    style: GoogleFonts.fraunces(
+                    style: GoogleFonts.spaceGrotesk(
                       fontSize: 18,
                       fontWeight: FontWeight.w700,
                     )),
@@ -900,7 +900,7 @@ class _LibraryViewState extends State<LibraryView> {
                     padding: const EdgeInsets.symmetric(vertical: 20),
                     child: Center(
                       child: Text('No clusters yet',
-                          style: GoogleFonts.dmSans(
+                          style: GoogleFonts.spaceGrotesk(
                             fontSize: 13,
                             color: SynapseColors.inkMuted,
                           )),
@@ -920,7 +920,7 @@ class _LibraryViewState extends State<LibraryView> {
                             : null,
                       ),
                       title: Text(g.name,
-                          style: GoogleFonts.dmSans(fontSize: 14)),
+                          style: GoogleFonts.spaceGrotesk(fontSize: 14)),
                       trailing: isMember
                           ? TextButton(
                               onPressed: () {

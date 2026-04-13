@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -14,18 +16,24 @@ class ChatView extends StatefulWidget {
   State<ChatView> createState() => _ChatViewState();
 }
 
-class _ChatViewState extends State<ChatView> {
+class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
   final _controller = TextEditingController();
   final _scrollController = ScrollController();
+  late AnimationController _shimmerCtrl;
 
   @override
   void initState() {
     super.initState();
+    _shimmerCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 3000),
+    )..repeat();
     WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
   }
 
   @override
   void dispose() {
+    _shimmerCtrl.dispose();
     _controller.dispose();
     _scrollController.dispose();
     super.dispose();
@@ -79,13 +87,35 @@ class _ChatViewState extends State<ChatView> {
       padding: const EdgeInsets.fromLTRB(24, 14, 16, 10),
       child: Row(
         children: [
-          Text(
-            'Cortex',
-            style: GoogleFonts.fraunces(
-              fontSize: 28,
-              fontWeight: FontWeight.w800,
-              color: isDark ? SynapseColors.darkInk : SynapseColors.ink,
-              letterSpacing: -0.5,
+          AnimatedBuilder(
+            animation: _shimmerCtrl,
+            builder: (context, child) {
+              return ShaderMask(
+                blendMode: BlendMode.srcIn,
+                shaderCallback: (bounds) {
+                  final dx = _shimmerCtrl.value * 3 - 1;
+                  return LinearGradient(
+                    begin: Alignment(dx - 0.3, 0),
+                    end: Alignment(dx + 0.3, 0),
+                    colors: [
+                      isDark ? SynapseColors.darkInk : SynapseColors.ink,
+                      isDark ? SynapseColors.darkAccent : SynapseColors.accent,
+                      isDark ? SynapseColors.darkInk : SynapseColors.ink,
+                    ],
+                    stops: const [0.0, 0.5, 1.0],
+                  ).createShader(bounds);
+                },
+                child: child,
+              );
+            },
+            child: Text(
+              'Cortex',
+              style: GoogleFonts.spaceGrotesk(
+                fontSize: 28,
+                fontWeight: FontWeight.w800,
+                color: Colors.white,
+                letterSpacing: -0.5,
+              ),
             ),
           ),
           const Spacer(),
@@ -148,7 +178,7 @@ class _ChatViewState extends State<ChatView> {
             const SizedBox(height: 28),
             Text(
               'Ask me anything',
-              style: GoogleFonts.fraunces(
+              style: GoogleFonts.spaceGrotesk(
                 fontSize: 28,
                 fontWeight: FontWeight.w800,
                 color: isDark ? SynapseColors.darkInk : SynapseColors.ink,
@@ -158,7 +188,7 @@ class _ChatViewState extends State<ChatView> {
             const SizedBox(height: 8),
             Text(
               'I can search through your saved\nmemories and answer questions.',
-              style: GoogleFonts.dmSans(
+              style: GoogleFonts.spaceGrotesk(
                 fontSize: 14,
                 color: SynapseColors.inkMuted,
                 height: 1.5,
@@ -196,7 +226,7 @@ class _ChatViewState extends State<ChatView> {
         ),
         child: Text(
           text,
-          style: GoogleFonts.dmSans(
+          style: GoogleFonts.spaceGrotesk(
             fontSize: 12,
             fontWeight: FontWeight.w500,
             color: isDark ? SynapseColors.darkInk : SynapseColors.ink,
@@ -234,7 +264,19 @@ class _ChatViewState extends State<ChatView> {
               padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
               decoration: isUser
                   ? BoxDecoration(
-                      color: isDark ? SynapseColors.darkAccent : SynapseColors.ink,
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: isDark
+                            ? const [
+                                Color(0xFFBF9EF7),
+                                Color(0xFF9B70E0),
+                              ]
+                            : const [
+                                Color(0xFFA371F2),
+                                Color(0xFF8B5BD8),
+                              ],
+                      ),
                       borderRadius: const BorderRadius.only(
                         topLeft: Radius.circular(22),
                         topRight: Radius.circular(22),
@@ -243,9 +285,12 @@ class _ChatViewState extends State<ChatView> {
                       ),
                     )
                   : BoxDecoration(
-                      color: isDark
-                          ? SynapseColors.darkCard
-                          : SynapseColors.peachLight,
+                      color: isDark ? SynapseColors.darkCard : Colors.white,
+                      border: isDark
+                          ? null
+                          : Border.all(
+                              color: Colors.black.withValues(alpha: 0.04),
+                            ),
                       borderRadius: const BorderRadius.only(
                         topLeft: Radius.circular(22),
                         topRight: Radius.circular(22),
@@ -256,10 +301,10 @@ class _ChatViewState extends State<ChatView> {
               child: isUser
                   ? Text(
                       msg.text,
-                      style: GoogleFonts.dmSans(
+                      style: GoogleFonts.spaceGrotesk(
                         fontSize: 14,
                         height: 1.45,
-                        color: Colors.white,
+                        color: isDark ? Colors.black : Colors.white,
                       ),
                     )
                   : _buildMarkdown(msg.text, isDark),
@@ -280,13 +325,13 @@ class _ChatViewState extends State<ChatView> {
         if (href != null) launchUrl(Uri.parse(href));
       },
       styleSheet: MarkdownStyleSheet(
-        p: GoogleFonts.dmSans(fontSize: 14, height: 1.5, color: ink),
-        h1: GoogleFonts.fraunces(fontSize: 18, fontWeight: FontWeight.w700, color: ink),
-        h2: GoogleFonts.fraunces(fontSize: 16, fontWeight: FontWeight.w700, color: ink),
-        h3: GoogleFonts.fraunces(fontSize: 15, fontWeight: FontWeight.w600, color: ink),
-        strong: GoogleFonts.dmSans(fontWeight: FontWeight.w600, color: ink),
-        em: GoogleFonts.dmSans(fontStyle: FontStyle.italic, color: ink),
-        listBullet: GoogleFonts.dmSans(fontSize: 14, color: ink),
+        p: GoogleFonts.spaceGrotesk(fontSize: 14, height: 1.5, color: ink),
+        h1: GoogleFonts.spaceGrotesk(fontSize: 18, fontWeight: FontWeight.w700, color: ink),
+        h2: GoogleFonts.spaceGrotesk(fontSize: 16, fontWeight: FontWeight.w700, color: ink),
+        h3: GoogleFonts.spaceGrotesk(fontSize: 15, fontWeight: FontWeight.w600, color: ink),
+        strong: GoogleFonts.spaceGrotesk(fontWeight: FontWeight.w600, color: ink),
+        em: GoogleFonts.spaceGrotesk(fontStyle: FontStyle.italic, color: ink),
+        listBullet: GoogleFonts.spaceGrotesk(fontSize: 14, color: ink),
         code: GoogleFonts.jetBrainsMono(
           fontSize: 12,
           color: SynapseColors.accent,
@@ -310,7 +355,7 @@ class _ChatViewState extends State<ChatView> {
           ),
         ),
         blockquotePadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-        a: GoogleFonts.dmSans(
+        a: GoogleFonts.spaceGrotesk(
           color: SynapseColors.accent,
           decoration: TextDecoration.underline,
         ),
@@ -320,8 +365,8 @@ class _ChatViewState extends State<ChatView> {
               : SynapseColors.ink.withValues(alpha: 0.08),
           width: 0.5,
         ),
-        tableHead: GoogleFonts.dmSans(fontWeight: FontWeight.w600, fontSize: 12, color: ink),
-        tableBody: GoogleFonts.dmSans(fontSize: 12, color: ink),
+        tableHead: GoogleFonts.spaceGrotesk(fontWeight: FontWeight.w600, fontSize: 12, color: ink),
+        tableBody: GoogleFonts.spaceGrotesk(fontSize: 12, color: ink),
       ),
     );
   }
@@ -338,28 +383,64 @@ class _ChatViewState extends State<ChatView> {
             decoration: BoxDecoration(
               color: isDark ? SynapseColors.darkLavender : SynapseColors.lavenderLight,
               borderRadius: BorderRadius.circular(10),
+              boxShadow: [
+                BoxShadow(
+                  color: SynapseColors.accent.withValues(alpha: 0.2),
+                  blurRadius: 8,
+                  spreadRadius: 1,
+                ),
+              ],
             ),
             child: Icon(Icons.auto_awesome_rounded,
                 size: 14, color: isDark ? SynapseColors.darkAccent : SynapseColors.accent),
           ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 16),
-            decoration: BoxDecoration(
-              color: isDark ? SynapseColors.darkCard : SynapseColors.peachLight,
-              borderRadius: const BorderRadius.only(
-                topLeft: Radius.circular(22),
-                topRight: Radius.circular(22),
-                bottomRight: Radius.circular(22),
-                bottomLeft: Radius.circular(6),
+          AnimatedBuilder(
+            animation: _shimmerCtrl,
+            builder: (context, child) {
+              final glowAlpha =
+                  (0.15 + 0.15 * math.sin(_shimmerCtrl.value * 2 * math.pi));
+              return Container(
+                padding: const EdgeInsets.all(2),
+                decoration: BoxDecoration(
+                  borderRadius: const BorderRadius.only(
+                    topLeft: Radius.circular(24),
+                    topRight: Radius.circular(24),
+                    bottomRight: Radius.circular(24),
+                    bottomLeft: Radius.circular(8),
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: SynapseColors.accent.withValues(alpha: glowAlpha),
+                      blurRadius: 16,
+                      spreadRadius: 2,
+                    ),
+                  ],
+                ),
+                child: child,
+              );
+            },
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 16),
+              decoration: BoxDecoration(
+                color: isDark ? SynapseColors.darkCard : Colors.white,
+                border: isDark
+                    ? null
+                    : Border.all(color: Colors.black.withValues(alpha: 0.04)),
+                borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(22),
+                  topRight: Radius.circular(22),
+                  bottomRight: Radius.circular(22),
+                  bottomLeft: Radius.circular(6),
+                ),
               ),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: List.generate(
-                3,
-                (i) => Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 3),
-                  child: _PulseDot(delay: i * 180),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: List.generate(
+                  3,
+                  (i) => Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 3),
+                    child: _PulseDot(delay: i * 180),
+                  ),
                 ),
               ),
             ),
@@ -370,10 +451,13 @@ class _ChatViewState extends State<ChatView> {
   }
 
   Widget _buildInput(bool isDark, SynapseProvider provider) {
+    final bottomPad = MediaQuery.of(context).padding.bottom;
     return Container(
-      margin: const EdgeInsets.fromLTRB(12, 4, 12, 8),
+      margin: EdgeInsets.fromLTRB(12, 4, 12, bottomPad + 56),
       decoration: BoxDecoration(
-        color: isDark ? SynapseColors.darkCard : Colors.white,
+        color: isDark
+            ? SynapseColors.darkCard.withValues(alpha: 0.9)
+            : Colors.white.withValues(alpha: 0.9),
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
           color: (isDark ? Colors.white : Colors.black).withValues(alpha: 0.06),
@@ -403,15 +487,38 @@ class _ChatViewState extends State<ChatView> {
             padding: const EdgeInsets.only(right: 6),
             child: GestureDetector(
               onTap: provider.isChatLoading ? null : () => _send(provider),
-              child: Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: isDark ? SynapseColors.darkAccent : SynapseColors.ink,
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: Icon(Icons.arrow_upward_rounded,
-                    color: isDark ? Colors.black : Colors.white, size: 20),
+              child: AnimatedBuilder(
+                animation: _shimmerCtrl,
+                builder: (context, _) {
+                  final pulse = (0.5 +
+                          0.5 *
+                              math.sin(_shimmerCtrl.value * 2 * math.pi)
+                                  .abs()) *
+                      0.3;
+                  return Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: isDark
+                            ? [SynapseColors.darkAccent, const Color(0xFF9B70E0)]
+                            : [SynapseColors.accent, SynapseColors.accentDark],
+                      ),
+                      borderRadius: BorderRadius.circular(14),
+                      boxShadow: [
+                        BoxShadow(
+                          color: SynapseColors.accent.withValues(alpha: pulse),
+                          blurRadius: 12,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: Icon(Icons.arrow_upward_rounded,
+                        color: isDark ? Colors.black : Colors.white, size: 20),
+                  );
+                },
               ),
             ),
           ),
@@ -424,6 +531,7 @@ class _ChatViewState extends State<ChatView> {
     final text = _controller.text.trim();
     if (text.isEmpty) return;
     _controller.clear();
+    _scrollToBottom();
     await provider.sendChatMessage(text);
     _scrollToBottom();
   }

@@ -14,6 +14,8 @@ class AppConstants {
   static const String galleryImportPromptedPref = 'gallery_import_prompted';
   static const String backgroundSharePref = 'background_share';
   static const String debugLogPref = 'debug_log_enabled';
+  static const String autoWirePref = 'auto_wire_on_share';
+  static const String geminiModelPref = 'gemini_model';
 
   static const int maxFreeLlmCalls = 2;
 

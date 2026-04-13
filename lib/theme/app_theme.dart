@@ -4,29 +4,73 @@ import 'package:google_fonts/google_fonts.dart';
 import '../models/thought.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Colors — clean white / deep black, no yellow hue
+// Typography helper — Clash Grotesk approximated via Space Grotesk
+// ─────────────────────────────────────────────────────────────────────────────
+
+class SynapseType {
+  SynapseType._();
+  static TextStyle display({
+    double fontSize = 36,
+    FontWeight fontWeight = FontWeight.w700,
+    Color? color,
+    double? letterSpacing,
+    double? height,
+  }) =>
+      GoogleFonts.spaceGrotesk(
+        fontSize: fontSize,
+        fontWeight: fontWeight,
+        color: color,
+        letterSpacing: letterSpacing ?? -1.0,
+        height: height ?? 1.1,
+      );
+
+  static TextStyle body({
+    double fontSize = 14,
+    FontWeight fontWeight = FontWeight.w400,
+    Color? color,
+    double? height,
+    double? letterSpacing,
+  }) =>
+      GoogleFonts.spaceGrotesk(
+        fontSize: fontSize,
+        fontWeight: fontWeight,
+        color: color,
+        height: height ?? 1.5,
+        letterSpacing: letterSpacing,
+      );
+
+  static TextStyle mono({
+    double fontSize = 13,
+    Color? color,
+    Color? backgroundColor,
+  }) =>
+      GoogleFonts.jetBrainsMono(
+        fontSize: fontSize,
+        color: color,
+        backgroundColor: backgroundColor,
+      );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Colors
 // ─────────────────────────────────────────────────────────────────────────────
 
 class SynapseColors {
   SynapseColors._();
 
-  // Light ink hierarchy
   static const Color ink = Color(0xFF1A1A1A);
   static const Color inkLight = Color(0xFF3D3D3D);
   static const Color inkMuted = Color(0xFF8E8E93);
   static const Color inkFaint = Color(0xFFC7C7CC);
 
-  // Accent — vibrant purple
   static const Color accent = Color(0xFFA371F2);
   static const Color accentDark = Color(0xFF8B5BD8);
   static const Color accentSoft = Color(0xFFD4C4F0);
   static const Color accentBg = Color(0xFFEDE4F8);
 
-  // Backgrounds — pure white, zero warmth
   static const Color lightBg = Color(0xFFFFFFFF);
   static const Color lightCard = Color(0xFFF5F5F7);
 
-  // Vibrant pastels
   static const Color peach = Color(0xFFFFD6BA);
   static const Color peachLight = Color(0xFFFFEBDD);
   static const Color lavenderWash = Color(0xFFE5DAFA);
@@ -42,7 +86,6 @@ class SynapseColors {
   static const Color error = Color(0xFFFF3B30);
   static const Color success = Color(0xFF34C759);
 
-  // Dark theme — true deep blacks, no brown
   static const Color darkBg = Color(0xFF000000);
   static const Color darkSurface = Color(0xFF1C1C1E);
   static const Color darkCard = Color(0xFF2C2C2E);
@@ -51,7 +94,6 @@ class SynapseColors {
   static const Color darkInkMuted = Color(0xFF98989D);
   static const Color darkAccent = Color(0xFFBF9EF7);
 
-  // Dark pastels — vibrant versions for dark mode
   static const Color darkPeach = Color(0xFF3D2A1F);
   static const Color darkLavender = Color(0xFF2D2440);
   static const Color darkMint = Color(0xFF1A3028);
@@ -164,7 +206,7 @@ class SynapseColors {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Gradients — vibrant pastel backgrounds, clean endpoints
+// Gradients — splash-style subtle washes, each page unique
 // ─────────────────────────────────────────────────────────────────────────────
 
 class SynapseGradients {
@@ -179,7 +221,7 @@ class SynapseGradients {
   static const LinearGradient heroDark = LinearGradient(
     begin: Alignment(-0.8, -0.6),
     end: Alignment(0.8, 0.8),
-    colors: [Color(0xFF1A1030), Color(0xFF000000)],
+    colors: [Color(0xFF2A1848), Color(0xFF0A0610)],
   );
 
   static const LinearGradient accent = LinearGradient(
@@ -188,64 +230,74 @@ class SynapseGradients {
     colors: [SynapseColors.accent, SynapseColors.accentDark],
   );
 
+  // Cortex — soft lavender tint
   static const LinearGradient chatBg = LinearGradient(
-    begin: Alignment.topCenter,
-    end: Alignment.bottomCenter,
-    colors: [Color(0xFFF0EAFC), Colors.white],
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+    colors: [Color(0xFFF3EDFF), Color(0xFFFFF0F8), Color(0xFFFFFFFF)],
+    stops: [0.0, 0.45, 1.0],
   );
-
   static const LinearGradient chatBgDark = LinearGradient(
-    begin: Alignment.topCenter,
-    end: Alignment.bottomCenter,
-    colors: [Color(0xFF12101A), Color(0xFF000000)],
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+    colors: [Color(0xFF1E1438), Color(0xFF120E20), Color(0xFF050308)],
+    stops: [0.0, 0.5, 1.0],
   );
 
+  // Memories — lavender wash (splash-style)
   static const LinearGradient libraryBg = LinearGradient(
-    begin: Alignment.topCenter,
-    end: Alignment.bottomCenter,
-    colors: [Color(0xFFFFEBDD), Colors.white],
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+    colors: [Color(0xFFF0EAFC), Color(0xFFF8EFF8), Color(0xFFFFFFFF)],
+    stops: [0.0, 0.4, 1.0],
   );
-
   static const LinearGradient libraryBgDark = LinearGradient(
-    begin: Alignment.topCenter,
-    end: Alignment.bottomCenter,
-    colors: [Color(0xFF1A1410), Color(0xFF000000)],
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+    colors: [Color(0xFF1A1528), Color(0xFF0F0C18), Color(0xFF050308)],
+    stops: [0.0, 0.5, 1.0],
   );
 
+  // Recall — cool sky blue wash
   static const LinearGradient timelineBg = LinearGradient(
-    begin: Alignment.topCenter,
-    end: Alignment.bottomCenter,
-    colors: [Color(0xFFE8F2FC), Colors.white],
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+    colors: [Color(0xFFE8F2FC), Color(0xFFF0EAFC), Color(0xFFFFFFFF)],
+    stops: [0.0, 0.5, 1.0],
   );
-
   static const LinearGradient timelineBgDark = LinearGradient(
-    begin: Alignment.topCenter,
-    end: Alignment.bottomCenter,
-    colors: [Color(0xFF0D1520), Color(0xFF000000)],
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+    colors: [Color(0xFF0F1828), Color(0xFF0C0F1A), Color(0xFF050308)],
+    stops: [0.0, 0.5, 1.0],
   );
 
+  // Vault — serious coral-red undertone
   static const LinearGradient vaultBg = LinearGradient(
     begin: Alignment.topCenter,
     end: Alignment.bottomCenter,
-    colors: [Color(0xFFFFECEC), Colors.white],
+    colors: [Color(0xFFFFF0EE), Color(0xFFFFF8F6), Color(0xFFFFFFFF)],
+    stops: [0.0, 0.35, 1.0],
   );
-
   static const LinearGradient vaultBgDark = LinearGradient(
     begin: Alignment.topCenter,
     end: Alignment.bottomCenter,
-    colors: [Color(0xFF1A0D0D), Color(0xFF000000)],
+    colors: [Color(0xFF281515), Color(0xFF140C0C), Color(0xFF050308)],
+    stops: [0.0, 0.45, 1.0],
   );
 
+  // Settings — neutral lavender
   static const LinearGradient settingsBg = LinearGradient(
     begin: Alignment.topCenter,
     end: Alignment.bottomCenter,
-    colors: [Color(0xFFF0EAFC), Colors.white],
+    colors: [Color(0xFFF3EDFF), Color(0xFFF8F6FF), Color(0xFFFFFFFF)],
+    stops: [0.0, 0.35, 1.0],
   );
-
   static const LinearGradient settingsBgDark = LinearGradient(
     begin: Alignment.topCenter,
     end: Alignment.bottomCenter,
-    colors: [Color(0xFF12101A), Color(0xFF000000)],
+    colors: [Color(0xFF1A1525), Color(0xFF0E0C15), Color(0xFF050308)],
+    stops: [0.0, 0.45, 1.0],
   );
 
   static const LinearGradient peachWash = LinearGradient(
@@ -259,8 +311,8 @@ class SynapseGradients {
         end: Alignment.bottomCenter,
         colors: dark
             ? [Colors.transparent, Colors.black54, Colors.black87]
-            : [Colors.transparent, Colors.white70, Colors.white],
-        stops: const [0.35, 0.75, 1.0],
+            : [Colors.transparent, Colors.white54, Colors.white],
+        stops: const [0.5, 0.8, 1.0],
       );
 
   static LinearGradient categoryCard(ThoughtCategory cat, {bool dark = false}) =>
@@ -280,9 +332,7 @@ class SynapseGradients {
 
 class SynapseShadows {
   SynapseShadows._();
-
   static const List<BoxShadow> none = [];
-
   static List<BoxShadow> get soft => [
         BoxShadow(
           color: Colors.black.withValues(alpha: 0.04),
@@ -290,7 +340,6 @@ class SynapseShadows {
           offset: const Offset(0, 2),
         ),
       ];
-
   static List<BoxShadow> get elevated => [
         BoxShadow(
           color: Colors.black.withValues(alpha: 0.06),
@@ -298,7 +347,6 @@ class SynapseShadows {
           offset: const Offset(0, 6),
         ),
       ];
-
   static List<BoxShadow> get glow => [
         BoxShadow(
           color: SynapseColors.accent.withValues(alpha: 0.2),
@@ -306,7 +354,6 @@ class SynapseShadows {
           offset: const Offset(0, 4),
         ),
       ];
-
   static List<BoxShadow> get softDark => [
         BoxShadow(
           color: Colors.black.withValues(alpha: 0.3),
@@ -466,11 +513,11 @@ class AppTheme {
     final ink = dark ? SynapseColors.darkInk : SynapseColors.ink;
     final inkMuted =
         dark ? SynapseColors.darkInkMuted : SynapseColors.inkMuted;
-    final accent = dark ? SynapseColors.darkAccent : SynapseColors.accent;
+    final accentColor = dark ? SynapseColors.darkAccent : SynapseColors.accent;
 
     final colorScheme = ColorScheme(
       brightness: brightness,
-      primary: accent,
+      primary: accentColor,
       onPrimary: Colors.white,
       secondary: SynapseColors.peach,
       onSecondary: SynapseColors.ink,
@@ -485,43 +532,39 @@ class AppTheme {
           (dark ? Colors.white : Colors.black).withValues(alpha: 0.04),
     );
 
-    final fraunces = GoogleFonts.fraunces;
-    final dmSans = GoogleFonts.dmSans;
-
     return base.copyWith(
       useMaterial3: true,
       colorScheme: colorScheme,
       scaffoldBackgroundColor: bg,
       textTheme: base.textTheme.copyWith(
-        headlineLarge: fraunces(
-          fontSize: 36, fontWeight: FontWeight.w800, color: ink,
-          letterSpacing: -1.0, height: 1.1,
-        ),
-        headlineMedium: fraunces(
-          fontSize: 28, fontWeight: FontWeight.w700, color: ink,
-          letterSpacing: -0.5, height: 1.15,
-        ),
-        headlineSmall: fraunces(
-          fontSize: 22, fontWeight: FontWeight.w700, color: ink,
-          letterSpacing: -0.3, height: 1.2,
-        ),
-        titleLarge: dmSans(fontSize: 17, fontWeight: FontWeight.w600, color: ink),
-        titleMedium: dmSans(fontSize: 15, fontWeight: FontWeight.w600, color: ink),
-        bodyLarge: dmSans(fontSize: 15, color: ink, height: 1.5),
-        bodyMedium: dmSans(fontSize: 13, color: inkMuted, height: 1.5),
-        bodySmall: dmSans(fontSize: 11, color: inkMuted, height: 1.4),
-        labelLarge: dmSans(fontSize: 13, fontWeight: FontWeight.w600, color: ink),
-        labelSmall: dmSans(
-          fontSize: 10, fontWeight: FontWeight.w500, color: inkMuted,
-          letterSpacing: 0.5,
-        ),
+        headlineLarge: SynapseType.display(
+            fontSize: 36, fontWeight: FontWeight.w700, color: ink),
+        headlineMedium: SynapseType.display(
+            fontSize: 28, fontWeight: FontWeight.w600, color: ink,
+            letterSpacing: -0.5, height: 1.15),
+        headlineSmall: SynapseType.display(
+            fontSize: 22, fontWeight: FontWeight.w600, color: ink,
+            letterSpacing: -0.3, height: 1.2),
+        titleLarge: SynapseType.body(
+            fontSize: 17, fontWeight: FontWeight.w600, color: ink),
+        titleMedium: SynapseType.body(
+            fontSize: 15, fontWeight: FontWeight.w600, color: ink),
+        bodyLarge: SynapseType.body(fontSize: 15, color: ink, height: 1.5),
+        bodyMedium: SynapseType.body(fontSize: 13, color: inkMuted, height: 1.5),
+        bodySmall: SynapseType.body(fontSize: 11, color: inkMuted, height: 1.4),
+        labelLarge: SynapseType.body(
+            fontSize: 13, fontWeight: FontWeight.w600, color: ink),
+        labelSmall: SynapseType.body(
+            fontSize: 10, fontWeight: FontWeight.w500, color: inkMuted,
+            letterSpacing: 0.5),
       ),
       appBarTheme: AppBarTheme(
         backgroundColor: Colors.transparent,
         elevation: 0,
         scrolledUnderElevation: 0,
         centerTitle: true,
-        titleTextStyle: fraunces(fontSize: 18, fontWeight: FontWeight.w600, color: ink),
+        titleTextStyle: SynapseType.body(
+            fontSize: 18, fontWeight: FontWeight.w600, color: ink),
         iconTheme: IconThemeData(color: ink, size: 22),
       ),
       cardTheme: CardThemeData(
@@ -532,7 +575,8 @@ class AppTheme {
       ),
       chipTheme: ChipThemeData(
         backgroundColor: SynapseColors.peachLight,
-        labelStyle: dmSans(fontSize: 11, fontWeight: FontWeight.w600, color: SynapseColors.ink),
+        labelStyle: SynapseType.body(
+            fontSize: 11, fontWeight: FontWeight.w600, color: SynapseColors.ink),
         shape: const StadiumBorder(),
         side: BorderSide.none,
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
@@ -558,10 +602,11 @@ class AppTheme {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
-          borderSide: BorderSide(color: accent, width: 1.5),
+          borderSide: BorderSide(color: accentColor, width: 1.5),
         ),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 15),
-        hintStyle: dmSans(fontSize: 14, color: inkMuted),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 18, vertical: 15),
+        hintStyle: SynapseType.body(fontSize: 14, color: inkMuted),
       ),
       bottomSheetTheme: BottomSheetThemeData(
         backgroundColor: dark ? SynapseColors.darkSurface : Colors.white,
@@ -577,7 +622,7 @@ class AppTheme {
       snackBarTheme: SnackBarThemeData(
         behavior: SnackBarBehavior.floating,
         backgroundColor: dark ? SynapseColors.darkInk : SynapseColors.ink,
-        contentTextStyle: dmSans(
+        contentTextStyle: SynapseType.body(
           fontSize: 13,
           color: dark ? SynapseColors.darkBg : Colors.white,
           fontWeight: FontWeight.w500,
@@ -592,7 +637,7 @@ class AppTheme {
           padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 16),
           shape: const StadiumBorder(),
           elevation: 0,
-          textStyle: dmSans(fontSize: 14, fontWeight: FontWeight.w600),
+          textStyle: SynapseType.body(fontSize: 14, fontWeight: FontWeight.w600),
         ),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
@@ -601,13 +646,13 @@ class AppTheme {
           shape: const StadiumBorder(),
           side: BorderSide(color: ink.withValues(alpha: 0.15)),
           foregroundColor: ink,
-          textStyle: dmSans(fontSize: 14, fontWeight: FontWeight.w600),
+          textStyle: SynapseType.body(fontSize: 14, fontWeight: FontWeight.w600),
         ),
       ),
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
-          foregroundColor: accent,
-          textStyle: dmSans(fontSize: 14, fontWeight: FontWeight.w600),
+          foregroundColor: accentColor,
+          textStyle: SynapseType.body(fontSize: 14, fontWeight: FontWeight.w600),
           shape: const StadiumBorder(),
         ),
       ),

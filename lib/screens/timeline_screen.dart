@@ -27,14 +27,27 @@ class TimelineScreen extends StatelessWidget {
           children: [
             Padding(
               padding: const EdgeInsets.fromLTRB(24, 14, 16, 10),
-              child: Text(
-                'Recall',
-                style: GoogleFonts.fraunces(
-                  fontSize: 28,
-                  fontWeight: FontWeight.w800,
-                  color: isDark ? SynapseColors.darkInk : SynapseColors.ink,
-                  letterSpacing: -0.5,
-                ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Recall',
+                    style: GoogleFonts.spaceGrotesk(
+                      fontSize: 28,
+                      fontWeight: FontWeight.w800,
+                      color: isDark ? SynapseColors.darkInk : SynapseColors.ink,
+                      letterSpacing: -0.5,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Your memory timeline',
+                    style: GoogleFonts.spaceGrotesk(
+                      fontSize: 13,
+                      color: SynapseColors.inkMuted,
+                    ),
+                  ),
+                ],
               ),
             ),
             Expanded(
@@ -100,7 +113,7 @@ class TimelineScreen extends StatelessWidget {
             const SizedBox(height: 24),
             Text(
               'No memories yet',
-              style: GoogleFonts.fraunces(
+              style: GoogleFonts.spaceGrotesk(
                 fontSize: 24,
                 fontWeight: FontWeight.w800,
                 color: isDark ? SynapseColors.darkInk : SynapseColors.ink,
@@ -110,7 +123,7 @@ class TimelineScreen extends StatelessWidget {
             const SizedBox(height: 8),
             Text(
               'Your timeline will appear here\nonce you start saving memories.',
-              style: GoogleFonts.dmSans(
+              style: GoogleFonts.spaceGrotesk(
                 fontSize: 14,
                 color: SynapseColors.inkMuted,
                 height: 1.5,
@@ -172,15 +185,20 @@ class TimelineScreen extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(24, 16, 16, 8),
+        Container(
+          margin: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          decoration: BoxDecoration(
+            color: isDark ? SynapseColors.darkCard : SynapseColors.skyBlueLight,
+            borderRadius: BorderRadius.circular(12),
+          ),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.baseline,
             textBaseline: TextBaseline.alphabetic,
             children: [
               Text(
                 period,
-                style: GoogleFonts.fraunces(
+                style: GoogleFonts.spaceGrotesk(
                   fontSize: 20,
                   fontWeight: FontWeight.w700,
                   color: isDark ? SynapseColors.darkInk : SynapseColors.ink,
@@ -190,12 +208,14 @@ class TimelineScreen extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
                 decoration: BoxDecoration(
-                  color: SynapseColors.skyBlueLight,
+                  color: isDark
+                      ? SynapseColors.skyBlueLight
+                      : Colors.white.withValues(alpha: 0.75),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
                   '${thoughts.length}',
-                  style: GoogleFonts.dmSans(
+                  style: GoogleFonts.spaceGrotesk(
                     fontSize: 11,
                     fontWeight: FontWeight.w700,
                     color: const Color(0xFF6BA3D6),
@@ -247,13 +267,32 @@ class TimelineScreen extends StatelessWidget {
               width: 48,
               child: Column(
                 children: [
-                  Container(
-                    width: 12,
-                    height: 12,
-                    margin: const EdgeInsets.only(top: 16),
-                    decoration: BoxDecoration(
-                      color: SynapseColors.categoryAccent(thought.category),
-                      shape: BoxShape.circle,
+                  Padding(
+                    padding: const EdgeInsets.only(top: 16),
+                    child: Center(
+                      child: Container(
+                        width: 20,
+                        height: 20,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          boxShadow: [
+                            BoxShadow(
+                              color: SynapseColors.categoryAccent(thought.category)
+                                  .withValues(alpha: 0.25),
+                              blurRadius: 6,
+                            ),
+                          ],
+                        ),
+                        child: Container(
+                          width: 14,
+                          height: 14,
+                          decoration: BoxDecoration(
+                            color: SynapseColors.categoryAccent(thought.category),
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                      ),
                     ),
                   ),
                   if (!isLast)
@@ -261,7 +300,17 @@ class TimelineScreen extends StatelessWidget {
                       child: Container(
                         width: 2,
                         margin: const EdgeInsets.symmetric(vertical: 4),
-                        color: SynapseColors.ink.withValues(alpha: 0.06),
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [
+                              SynapseColors.categoryAccent(thought.category)
+                                  .withValues(alpha: 0.15),
+                              Colors.transparent,
+                            ],
+                          ),
+                        ),
                       ),
                     ),
                 ],
@@ -285,7 +334,7 @@ class TimelineScreen extends StatelessWidget {
                         children: [
                           Text(
                             thought.displayTitle,
-                            style: GoogleFonts.dmSans(
+                            style: GoogleFonts.spaceGrotesk(
                               fontSize: 14,
                               fontWeight: FontWeight.w600,
                               height: 1.3,
@@ -299,7 +348,7 @@ class TimelineScreen extends StatelessWidget {
                           const SizedBox(height: 4),
                           Text(
                             timeago.format(thought.createdAt),
-                            style: GoogleFonts.dmSans(
+                            style: GoogleFonts.spaceGrotesk(
                               fontSize: 11,
                               color: SynapseColors.inkMuted,
                             ),

@@ -93,28 +93,6 @@ class _LinkCard extends StatelessWidget {
                   ),
                 ),
               ),
-              Positioned.fill(
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: isDark
-                          ? [
-                              Colors.transparent,
-                              Colors.black.withValues(alpha: 0.6),
-                              SynapseColors.categoryTint(thought.category, dark: true),
-                            ]
-                          : [
-                              Colors.transparent,
-                              SynapseColors.categoryTint(thought.category).withValues(alpha: 0.5),
-                              SynapseColors.categoryTint(thought.category),
-                            ],
-                      stops: const [0.45, 0.8, 1.0],
-                    ),
-                  ),
-                ),
-              ),
               if (thought.isClassified)
                 Positioned(
                   top: 10,
@@ -134,7 +112,7 @@ class _LinkCard extends StatelessWidget {
                         const SizedBox(width: 3),
                         Text(
                           'Wired',
-                          style: GoogleFonts.dmSans(
+                          style: GoogleFonts.spaceGrotesk(
                             fontSize: 9,
                             fontWeight: FontWeight.w700,
                             color: Colors.white,
@@ -147,7 +125,7 @@ class _LinkCard extends StatelessWidget {
             ],
           ),
         Padding(
-          padding: EdgeInsets.fromLTRB(16, hasImage ? 0 : 16, 16, 14),
+          padding: EdgeInsets.fromLTRB(16, hasImage ? 10 : 16, 16, 14),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -157,7 +135,7 @@ class _LinkCard extends StatelessWidget {
                   padding: EdgeInsets.only(bottom: 5, top: hasImage ? 0 : 0),
                   child: Text(
                     thought.siteName!.toUpperCase(),
-                    style: GoogleFonts.dmSans(
+                    style: GoogleFonts.spaceGrotesk(
                       fontSize: 9,
                       fontWeight: FontWeight.w600,
                       color: SynapseColors.inkMuted,
@@ -168,7 +146,7 @@ class _LinkCard extends StatelessWidget {
                 ),
               Text(
                 thought.displayTitle,
-                style: GoogleFonts.fraunces(
+                style: GoogleFonts.spaceGrotesk(
                   fontSize: 16,
                   fontWeight: FontWeight.w700,
                   color: isDark ? SynapseColors.darkInk : SynapseColors.ink,
@@ -183,7 +161,7 @@ class _LinkCard extends StatelessWidget {
                 const SizedBox(height: 5),
                 Text(
                   thought.description!,
-                  style: GoogleFonts.dmSans(
+                  style: GoogleFonts.spaceGrotesk(
                     fontSize: 13,
                     color: SynapseColors.inkMuted,
                     height: 1.4,
@@ -253,7 +231,7 @@ class _ScreenshotCard extends StatelessWidget {
                 children: [
                   Text(
                     thought.displayTitle,
-                    style: GoogleFonts.fraunces(
+                    style: GoogleFonts.spaceGrotesk(
                       fontSize: 15,
                       fontWeight: FontWeight.w700,
                       color: isDark
@@ -306,7 +284,7 @@ class _MetaRow extends StatelessWidget {
             ),
             child: Text(
               '${thought.category.emoji} ${thought.category.label}',
-              style: GoogleFonts.dmSans(
+              style: GoogleFonts.spaceGrotesk(
                 fontSize: 10,
                 fontWeight: FontWeight.w600,
                 color: isDark
@@ -319,7 +297,7 @@ class _MetaRow extends StatelessWidget {
         ],
         Text(
           timeago.format(thought.createdAt),
-          style: GoogleFonts.dmSans(
+          style: GoogleFonts.spaceGrotesk(
             fontSize: 10,
             color: SynapseColors.inkFaint,
           ),

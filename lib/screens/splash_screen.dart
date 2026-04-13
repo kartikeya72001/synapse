@@ -116,7 +116,7 @@ class _SplashScreenState extends State<SplashScreen>
                     opacity: _brandFade,
                     child: Text(
                       'synapse',
-                      style: GoogleFonts.fraunces(
+                      style: GoogleFonts.spaceGrotesk(
                         fontSize: 48,
                         fontWeight: FontWeight.w800,
                         color: isDark
@@ -132,7 +132,7 @@ class _SplashScreenState extends State<SplashScreen>
                   opacity: _tagFade,
                   child: Text(
                     'YOUR SECOND BRAIN',
-                    style: GoogleFonts.dmSans(
+                    style: GoogleFonts.spaceGrotesk(
                       fontSize: 12,
                       fontWeight: FontWeight.w500,
                       color: isDark
