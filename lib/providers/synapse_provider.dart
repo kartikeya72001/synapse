@@ -93,6 +93,7 @@ class SynapseProvider extends ChangeNotifier {
   }
 
   LocalLlmService get localLlm => _localLlm;
+  DatabaseService get db => _db;
 
   SynapseProvider() {
     _groupService = GroupService(() => _db.database);
@@ -528,6 +529,7 @@ class SynapseProvider extends ChangeNotifier {
       await createNewConversation(silent: true);
     } else {
       _currentConversationId = _conversations.first.id;
+      await _db.decompressConversationMessages(_currentConversationId!);
       _chatMessages = await _db.getConversationMessages(_currentConversationId!);
     }
     notifyListeners();
@@ -551,7 +553,13 @@ class SynapseProvider extends ChangeNotifier {
 
   Future<void> switchConversation(String id) async {
     if (id == _currentConversationId) return;
+    // Compress the outgoing conversation's messages
+    if (_currentConversationId != null) {
+      await _db.compressConversationMessages(_currentConversationId!);
+    }
     _currentConversationId = id;
+    // Decompress the incoming conversation's messages before loading
+    await _db.decompressConversationMessages(id);
     _chatMessages = await _db.getConversationMessages(id);
     notifyListeners();
   }

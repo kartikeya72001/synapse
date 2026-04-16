@@ -34,14 +34,27 @@ enum LocalModelChoice {
   );
 }
 
+class DownloadCancelledException implements Exception {
+  @override
+  String toString() => 'Download was cancelled by the user.';
+}
+
 class LocalLlmService {
   final _dbg = DebugLogger.instance;
   bool _isDownloading = false;
   double _downloadProgress = 0.0;
   bool _initialized = false;
+  bool _cancelRequested = false;
 
   bool get isDownloading => _isDownloading;
   double get downloadProgress => _downloadProgress;
+
+  void cancelDownload() {
+    if (_isDownloading) {
+      _cancelRequested = true;
+      _dbg.log('LOCAL_LLM', 'Download cancellation requested');
+    }
+  }
 
   Future<void> _ensureInitialized({String? huggingFaceToken}) async {
     if (_initialized && huggingFaceToken == null) return;
@@ -75,6 +88,7 @@ class LocalLlmService {
     if (_isDownloading) return;
     _isDownloading = true;
     _downloadProgress = 0.0;
+    _cancelRequested = false;
 
     try {
       _dbg.log('LOCAL_LLM', 'Starting download of ${choice.displayName}');
@@ -88,6 +102,9 @@ class LocalLlmService {
       )
           .fromNetwork(choice.downloadUrl)
           .withProgress((percent) {
+            if (_cancelRequested) {
+              throw DownloadCancelledException();
+            }
             _downloadProgress = percent / 100.0;
             onProgress?.call(_downloadProgress);
           })
@@ -98,12 +115,19 @@ class LocalLlmService {
       await prefs.setString(AppConstants.localModelSizePref, choice.sizeLabel);
 
       _dbg.log('LOCAL_LLM', '${choice.displayName} download complete');
+    } on DownloadCancelledException {
+      _dbg.log('LOCAL_LLM', 'Download cancelled, cleaning up partial files');
+      try {
+        await deleteModel();
+      } catch (_) {}
+      rethrow;
     } catch (e) {
       _dbg.log('LOCAL_LLM', 'Download error: $e');
       rethrow;
     } finally {
       _isDownloading = false;
       _downloadProgress = 0.0;
+      _cancelRequested = false;
     }
   }
 

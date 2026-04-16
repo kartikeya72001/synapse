@@ -8,6 +8,7 @@ import 'providers/synapse_provider.dart';
 import 'screens/home_screen.dart';
 import 'screens/splash_screen.dart';
 import 'services/debug_logger.dart';
+import 'services/google_drive_service.dart';
 import 'services/share_handler_service.dart';
 import 'theme/app_theme.dart';
 import 'utils/constants.dart';
@@ -44,19 +45,22 @@ class SynapseApp extends StatefulWidget {
   State<SynapseApp> createState() => _SynapseAppState();
 }
 
-class _SynapseAppState extends State<SynapseApp> {
+class _SynapseAppState extends State<SynapseApp> with WidgetsBindingObserver {
   final _shareHandler = ShareHandlerService();
+  final _driveService = GoogleDriveService();
   static const _qsChannel = MethodChannel('com.synapse.synapse/quicksettings');
   late SynapseProvider _provider;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _provider = SynapseProvider();
     _provider.setWiringChecker(_shareHandler.isWiringInProgress);
     _provider.setCarouselFetcher(_shareHandler.fetchCarouselImages);
     _provider.init();
     DebugLogger.instance.loadPreference();
+    _driveService.signInSilently();
 
     _shareHandler.onThoughtSaved = (thought) {
       _provider.addThought(thought, fromShare: true);
@@ -105,7 +109,15 @@ class _SynapseAppState extends State<SynapseApp> {
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused) {
+      _driveService.autoBackupIfNeeded(_provider.db);
+    }
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _shareHandler.dispose();
     super.dispose();
   }

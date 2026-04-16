@@ -24,6 +24,8 @@ class AppConstants {
   static const String localModelNamePref = 'local_model_name';
   static const String localModelSizePref = 'local_model_size';
   static const String huggingFaceTokenPref = 'hugging_face_token';
+  static const String backupFrequencyPref = 'backup_frequency_hours';
+  static const String lastAutoBackupPref = 'last_auto_backup';
 
   static const int maxFreeLlmCalls = 2;
   static const int maxChatHistory = 50;

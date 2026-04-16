@@ -5,9 +5,11 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:timeago/timeago.dart' as timeago;
 import '../utils/permissions.dart';
 import '../providers/synapse_provider.dart' show SynapseProvider, AppThemeMode;
 import '../services/debug_logger.dart';
+import '../services/google_drive_service.dart';
 import '../services/llm_service.dart';
 import '../services/local_llm_service.dart';
 import '../services/onboarding_service.dart';
@@ -49,6 +51,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
   String? _localModelSize;
   bool _isDownloadingModel = false;
   double _downloadProgress = 0.0;
+
+  // Cloud Backup state
+  final GoogleDriveService _driveService = GoogleDriveService();
+  bool _isBackingUp = false;
+  bool _isRestoring = false;
+  DateTime? _lastBackupTime;
+  int? _backupFrequencyHours;
 
   static const List<int?> _autoDeletePresets = [null, 7, 15, 30, 90, 180, 365];
 
@@ -93,6 +102,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final localName = await synapseProvider.localLlm.getInstalledModelName();
     final localSize = await synapseProvider.localLlm.getInstalledModelSize();
     final hfToken = prefs.getString(AppConstants.huggingFaceTokenPref) ?? '';
+
+    final backupFreq = prefs.getInt(AppConstants.backupFrequencyPref);
+
+    // Try silent sign-in for Drive and fetch last backup time
+    await _driveService.signInSilently();
+    if (_driveService.isSignedIn) {
+      _lastBackupTime = await _driveService.lastBackupTime();
+    }
+
+    _backupFrequencyHours = backupFreq;
 
     if (!mounted) return;
 
@@ -300,6 +319,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             ),
           ),
+          const SizedBox(height: 32),
+          _buildSectionTitle(theme, 'Cloud Backup'),
+          const SizedBox(height: 12),
+          _buildCloudBackupSection(theme, colorScheme, isDark),
           const SizedBox(height: 32),
           _buildSectionTitle(theme, 'Data'),
           const SizedBox(height: 12),
@@ -1235,6 +1258,343 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
+  Widget _buildCloudBackupSection(ThemeData theme, ColorScheme colorScheme, bool isDark) {
+    if (!_driveService.isSignedIn) {
+      return GestureDetector(
+        onTap: () async {
+          final success = await _driveService.signIn();
+          if (success && mounted) {
+            _lastBackupTime = await _driveService.lastBackupTime();
+            setState(() {});
+          } else if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Google sign-in cancelled or failed.')),
+            );
+          }
+        },
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: SynapseDecoration.card(dark: isDark),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: isDark
+                      ? SynapseColors.darkLavender
+                      : SynapseColors.lavenderLight,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(Icons.cloud_upload_rounded,
+                    color: SynapseColors.accent, size: 20),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Sign in with Google',
+                        style: theme.textTheme.titleMedium),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Back up your data to Google Drive',
+                      style: theme.textTheme.bodySmall,
+                    ),
+                  ],
+                ),
+              ),
+              Icon(Icons.login_rounded,
+                  color: SynapseColors.accent, size: 20),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return Column(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: SynapseDecoration.card(dark: isDark),
+          child: Column(
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: SynapseColors.success.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Icon(Icons.check_circle_rounded,
+                        color: SynapseColors.success, size: 20),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          _driveService.userEmail ?? 'Connected',
+                          style: theme.textTheme.titleMedium,
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          _lastBackupTime != null
+                              ? 'Last backup: ${timeago.format(_lastBackupTime!)}'
+                              : 'No backup yet',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: SynapseColors.inkMuted,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: () async {
+                      await _driveService.signOut();
+                      if (mounted) {
+                        setState(() => _lastBackupTime = null);
+                      }
+                    },
+                    child: Text(
+                      'Sign out',
+                      style: GoogleFonts.spaceGrotesk(
+                        fontSize: 12,
+                        color: SynapseColors.error,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              Row(
+                children: [
+                  Expanded(
+                    child: FilledButton.icon(
+                      onPressed: _isBackingUp || _isRestoring
+                          ? null
+                          : _performBackup,
+                      icon: _isBackingUp
+                          ? SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                          : const Icon(Icons.backup_rounded, size: 16),
+                      label: Text(
+                        _isBackingUp ? 'Backing up...' : 'Backup Now',
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: SynapseColors.accent,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: _isBackingUp || _isRestoring
+                          ? null
+                          : _performRestore,
+                      icon: _isRestoring
+                          ? SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: SynapseColors.accent,
+                              ),
+                            )
+                          : Icon(Icons.cloud_download_rounded,
+                              size: 16, color: SynapseColors.accent),
+                      label: Text(
+                        _isRestoring ? 'Restoring...' : 'Restore',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: SynapseColors.accent,
+                        ),
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        side: BorderSide(
+                          color: SynapseColors.accent.withValues(alpha: 0.3),
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 10),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: SynapseDecoration.card(dark: isDark),
+          child: Row(
+            children: [
+              Icon(Icons.schedule_rounded,
+                  color: SynapseColors.accent, size: 18),
+              const SizedBox(width: 10),
+              Text('Auto backup',
+                  style: theme.textTheme.bodyMedium),
+              const Spacer(),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+                decoration: BoxDecoration(
+                  color: isDark
+                      ? SynapseColors.darkLavender
+                      : SynapseColors.lavenderLight,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: DropdownButtonHideUnderline(
+                  child: DropdownButton<int?>(
+                    value: _backupFrequencyHours,
+                    isDense: true,
+                    borderRadius: BorderRadius.circular(12),
+                    style: GoogleFonts.spaceGrotesk(
+                      fontSize: 13,
+                      color: theme.textTheme.bodyMedium?.color,
+                    ),
+                    dropdownColor: isDark
+                        ? SynapseColors.darkSurface
+                        : Colors.white,
+                    items: const [
+                      DropdownMenuItem(value: null, child: Text('Off')),
+                      DropdownMenuItem(value: 6, child: Text('Every 6h')),
+                      DropdownMenuItem(value: 12, child: Text('Every 12h')),
+                      DropdownMenuItem(value: 24, child: Text('Daily')),
+                      DropdownMenuItem(value: 72, child: Text('Every 3 days')),
+                      DropdownMenuItem(value: 168, child: Text('Weekly')),
+                    ],
+                    onChanged: (value) async {
+                      setState(() => _backupFrequencyHours = value);
+                      final prefs = await SharedPreferences.getInstance();
+                      if (value == null) {
+                        await prefs.remove(AppConstants.backupFrequencyPref);
+                      } else {
+                        await prefs.setInt(AppConstants.backupFrequencyPref, value);
+                      }
+                    },
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 6),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4),
+          child: Row(
+            children: [
+              Icon(Icons.info_outline_rounded,
+                  size: 13, color: SynapseColors.inkMuted),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  'Backup is stored in a hidden app folder on your Google Drive.',
+                  style: GoogleFonts.spaceGrotesk(
+                    fontSize: 11,
+                    color: SynapseColors.inkMuted,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _performBackup() async {
+    if (!mounted) return;
+    setState(() => _isBackingUp = true);
+    try {
+      final provider = context.read<SynapseProvider>();
+      await _driveService.backup(provider.db);
+      _lastBackupTime = DateTime.now();
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(
+        AppConstants.lastAutoBackupPref,
+        _lastBackupTime!.toIso8601String(),
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Backup complete.')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Backup failed: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isBackingUp = false);
+    }
+  }
+
+  Future<void> _performRestore() async {
+    if (!mounted) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Restore from backup?'),
+        content: const Text(
+          'This will replace ALL local data with the backup from Google Drive. '
+          'This action cannot be undone.\n\n'
+          'Consider exporting your current data as CSV first.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: FilledButton.styleFrom(
+              backgroundColor: SynapseColors.error,
+            ),
+            child: const Text('Restore'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _isRestoring = true);
+    try {
+      final provider = context.read<SynapseProvider>();
+      await _driveService.restore(provider.db);
+      await provider.loadThoughts();
+      await provider.loadConversations();
+      await provider.loadGroups();
+      await provider.reindexEmbeddings();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Restore complete. Data reloaded.')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Restore failed: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isRestoring = false);
+    }
+  }
+
   Widget _buildAboutCard(ThemeData theme, ColorScheme colorScheme, bool isDark) {
     return Container(
       clipBehavior: Clip.antiAlias,
@@ -1523,6 +1883,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 color: SynapseColors.inkMuted,
               ),
             ),
+            const SizedBox(height: 12),
+            TextButton.icon(
+              onPressed: () {
+                final localLlm = context.read<SynapseProvider>().localLlm;
+                localLlm.cancelDownload();
+              },
+              icon: Icon(Icons.cancel_rounded,
+                  size: 16, color: SynapseColors.error),
+              label: Text(
+                'Cancel',
+                style: GoogleFonts.spaceGrotesk(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: SynapseColors.error,
+                ),
+              ),
+            ),
           ],
         ),
       );
@@ -1790,6 +2167,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
         });
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('${choice.displayName} installed successfully!')),
+        );
+      }
+    } on DownloadCancelledException {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Download cancelled.')),
         );
       }
     } catch (e) {

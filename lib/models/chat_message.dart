@@ -1,3 +1,6 @@
+import 'dart:typed_data';
+import '../services/compression_service.dart';
+
 enum ChatMessageRole { user, assistant, system }
 
 class ChatMessage {
@@ -33,9 +36,19 @@ class ChatMessage {
   }
 
   factory ChatMessage.fromMap(Map<String, dynamic> map) {
+    final rawText = map['text'];
+    final isCompressed = (map['isCompressed'] as int?) == 1;
+    String text;
+    if (isCompressed && rawText is Uint8List) {
+      text = CompressionService.decompress(rawText);
+    } else if (isCompressed && rawText is List<int>) {
+      text = CompressionService.decompress(Uint8List.fromList(rawText));
+    } else {
+      text = rawText as String;
+    }
     return ChatMessage(
       id: map['id'] as String,
-      text: map['text'] as String,
+      text: text,
       role: ChatMessageRole.values.firstWhere(
         (e) => e.name == map['role'],
         orElse: () => ChatMessageRole.assistant,

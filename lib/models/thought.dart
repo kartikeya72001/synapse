@@ -1,3 +1,5 @@
+import '../services/compression_service.dart';
+
 enum ThoughtType { link, screenshot }
 
 enum ThoughtCategory {
@@ -189,46 +191,48 @@ class Thought {
       'url': url,
       'imagePath': imagePath,
       'title': title,
-      'description': description,
+      'description': CompressionService.compressField(description),
       'previewImageUrl': previewImageUrl,
       'siteName': siteName,
       'favicon': favicon,
       'category': category.name,
-      'llmSummary': llmSummary,
-      'extractedInfo': extractedInfo,
-      'ocrText': ocrText,
-      'cachedText': cachedText,
+      'llmSummary': CompressionService.compressField(llmSummary),
+      'extractedInfo': CompressionService.compressField(extractedInfo),
+      'ocrText': CompressionService.compressField(ocrText),
+      'cachedText': CompressionService.compressField(cachedText),
       'isLinkDead': isLinkDead ? 1 : 0,
       'tags': tags.join(','),
       'createdAt': createdAt.toIso8601String(),
       'updatedAt': updatedAt.toIso8601String(),
       'isClassified': isClassified ? 1 : 0,
-      'userNotes': userNotes,
+      'userNotes': CompressionService.compressField(userNotes),
+      'isCompressed': 1,
     };
   }
 
   factory Thought.fromMap(Map<String, dynamic> map) {
+    // Always try readField — it handles both BLOB and plain TEXT gracefully
     return Thought(
       id: map['id'] as String,
       type: ThoughtType.values.firstWhere((e) => e.name == map['type']),
       url: map['url'] as String?,
       imagePath: map['imagePath'] as String?,
       title: map['title'] as String?,
-      description: map['description'] as String?,
+      description: CompressionService.readField(map['description']),
       previewImageUrl: map['previewImageUrl'] as String?,
       siteName: map['siteName'] as String?,
       favicon: map['favicon'] as String?,
       category: categoryFromString(map['category'] as String? ?? 'other'),
-      llmSummary: map['llmSummary'] as String?,
-      extractedInfo: map['extractedInfo'] as String?,
-      ocrText: map['ocrText'] as String?,
-      cachedText: map['cachedText'] as String?,
+      llmSummary: CompressionService.readField(map['llmSummary']),
+      extractedInfo: CompressionService.readField(map['extractedInfo']),
+      ocrText: CompressionService.readField(map['ocrText']),
+      cachedText: CompressionService.readField(map['cachedText']),
       isLinkDead: (map['isLinkDead'] as int?) == 1,
       tags: (map['tags'] as String?)?.split(',').where((t) => t.isNotEmpty).toList() ?? [],
       createdAt: DateTime.parse(map['createdAt'] as String),
       updatedAt: DateTime.parse(map['updatedAt'] as String),
       isClassified: (map['isClassified'] as int?) == 1,
-      userNotes: map['userNotes'] as String?,
+      userNotes: CompressionService.readField(map['userNotes']),
     );
   }
 

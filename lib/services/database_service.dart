@@ -1,9 +1,11 @@
 import 'dart:convert';
+import 'dart:typed_data';
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
 import '../models/thought.dart';
 import '../models/chat_message.dart';
 import '../models/chat_conversation.dart';
+import 'compression_service.dart';
 
 class DatabaseService {
   static Database? _database;
@@ -35,12 +37,13 @@ class DatabaseService {
   static const String _createChatTableSql = '''
     CREATE TABLE IF NOT EXISTS $_chatTable (
       id TEXT PRIMARY KEY,
-      text TEXT NOT NULL,
+      text BLOB NOT NULL,
       role TEXT NOT NULL,
       thoughtId TEXT,
       timestamp TEXT NOT NULL,
       conversationId TEXT,
-      imagePath TEXT
+      imagePath TEXT,
+      isCompressed INTEGER DEFAULT 0
     )
   ''';
 
@@ -60,7 +63,7 @@ class DatabaseService {
 
     return await openDatabase(
       path,
-      version: 9,
+      version: 11,
       onCreate: (db, version) async {
         await db.execute('''
           CREATE TABLE $_tableName (
@@ -69,21 +72,22 @@ class DatabaseService {
             url TEXT,
             imagePath TEXT,
             title TEXT,
-            description TEXT,
+            description BLOB,
             previewImageUrl TEXT,
             siteName TEXT,
             favicon TEXT,
             category TEXT DEFAULT 'other',
-            llmSummary TEXT,
-            extractedInfo TEXT,
-            ocrText TEXT,
-            cachedText TEXT,
+            llmSummary BLOB,
+            extractedInfo BLOB,
+            ocrText BLOB,
+            cachedText BLOB,
             isLinkDead INTEGER DEFAULT 0,
             tags TEXT,
             createdAt TEXT NOT NULL,
             updatedAt TEXT NOT NULL,
             isClassified INTEGER DEFAULT 0,
-            userNotes TEXT
+            userNotes BLOB,
+            isCompressed INTEGER DEFAULT 1
           )
         ''');
         await db.execute('''
@@ -204,6 +208,62 @@ class DatabaseService {
             );
           }
         }
+        if (oldVersion < 10) {
+          // Add isCompressed flag to thoughts
+          try {
+            await db.execute(
+              'ALTER TABLE $_tableName ADD COLUMN isCompressed INTEGER DEFAULT 0',
+            );
+          } catch (_) {}
+          // Add isCompressed flag to chat_messages
+          try {
+            await db.execute(
+              'ALTER TABLE $_chatTable ADD COLUMN isCompressed INTEGER DEFAULT 0',
+            );
+          } catch (_) {}
+          // Compress existing thought text fields in a batch
+          final rows = await db.query(_tableName);
+          for (final row in rows) {
+            final id = row['id'] as String;
+            final updates = <String, dynamic>{'isCompressed': 1};
+            for (final field in [
+              'description', 'llmSummary', 'extractedInfo',
+              'ocrText', 'cachedText', 'userNotes',
+            ]) {
+              final value = row[field];
+              if (value != null && value is String && value.isNotEmpty) {
+                updates[field] = CompressionService.compress(value);
+              }
+            }
+            await db.update(_tableName, updates,
+                where: 'id = ?', whereArgs: [id]);
+          }
+        }
+        if (oldVersion < 11) {
+          // Recovery: re-read all thought fields, decode from whatever format
+          // (Brotli-corrupted, raw text, or already gzip), and re-compress with gzip.
+          final rows = await db.query(_tableName);
+          for (final row in rows) {
+            final id = row['id'] as String;
+            final updates = <String, dynamic>{'isCompressed': 1};
+            for (final field in [
+              'description', 'llmSummary', 'extractedInfo',
+              'ocrText', 'cachedText', 'userNotes',
+            ]) {
+              final value = row[field];
+              if (value == null) continue;
+              // Decode whatever is there
+              final text = CompressionService.readField(value);
+              if (text != null && text.isNotEmpty) {
+                updates[field] = CompressionService.compress(text);
+              } else {
+                updates[field] = null;
+              }
+            }
+            await db.update(_tableName, updates,
+                where: 'id = ?', whereArgs: [id]);
+          }
+        }
       },
     );
   }
@@ -261,10 +321,8 @@ class DatabaseService {
     final pattern = '%$query%';
     final maps = await db.query(
       _tableName,
-      where:
-          'title LIKE ? OR description LIKE ? OR tags LIKE ? OR url LIKE ? '
-          'OR llmSummary LIKE ? OR extractedInfo LIKE ? OR ocrText LIKE ?',
-      whereArgs: List.filled(7, pattern),
+      where: 'title LIKE ? OR tags LIKE ? OR url LIKE ? OR siteName LIKE ?',
+      whereArgs: List.filled(4, pattern),
       orderBy: 'createdAt DESC',
     );
     return maps.map((map) => Thought.fromMap(map)).toList();
@@ -469,5 +527,114 @@ class DatabaseService {
       where: 'thoughtId = ?',
       whereArgs: [thoughtId],
     );
+  }
+
+  // ── Chat Compression ──
+
+  Future<void> compressConversationMessages(String conversationId) async {
+    final db = await database;
+    final rows = await db.query(
+      _chatTable,
+      where: 'conversationId = ? AND isCompressed = 0',
+      whereArgs: [conversationId],
+    );
+    for (final row in rows) {
+      final text = row['text'];
+      if (text == null) continue;
+      final textStr = text is String ? text : utf8.decode(text as List<int>);
+      await db.update(
+        _chatTable,
+        {
+          'text': CompressionService.compress(textStr),
+          'isCompressed': 1,
+        },
+        where: 'id = ?',
+        whereArgs: [row['id']],
+      );
+    }
+  }
+
+  Future<void> decompressConversationMessages(String conversationId) async {
+    final db = await database;
+    final rows = await db.query(
+      _chatTable,
+      where: 'conversationId = ? AND isCompressed = 1',
+      whereArgs: [conversationId],
+    );
+    for (final row in rows) {
+      final blob = row['text'];
+      if (blob == null) continue;
+      String textStr;
+      if (blob is Uint8List) {
+        textStr = CompressionService.decompress(blob);
+      } else if (blob is List<int>) {
+        textStr = CompressionService.decompress(Uint8List.fromList(blob));
+      } else {
+        continue;
+      }
+      await db.update(
+        _chatTable,
+        {
+          'text': textStr,
+          'isCompressed': 0,
+        },
+        where: 'id = ?',
+        whereArgs: [row['id']],
+      );
+    }
+  }
+
+  // ── Backup / Restore helpers ──
+
+  Future<List<Map<String, dynamic>>> getAllThoughtMaps() async {
+    final db = await database;
+    return db.query(_tableName);
+  }
+
+  Future<List<Map<String, dynamic>>> getAllEmbeddingMaps() async {
+    final db = await database;
+    return db.query(_embeddingsTable);
+  }
+
+  Future<List<Map<String, dynamic>>> getAllConversationMaps() async {
+    final db = await database;
+    return db.query(_conversationsTable);
+  }
+
+  Future<List<Map<String, dynamic>>> getAllChatMessageMaps() async {
+    final db = await database;
+    return db.query(_chatTable);
+  }
+
+  Future<List<Map<String, dynamic>>> getAllGroupMaps() async {
+    final db = await database;
+    return db.query('thought_groups');
+  }
+
+  Future<List<Map<String, dynamic>>> getAllGroupMemberMaps() async {
+    final db = await database;
+    return db.query('thought_group_members');
+  }
+
+  Future<void> clearAllData() async {
+    final db = await database;
+    await db.delete(_chatTable);
+    await db.delete(_conversationsTable);
+    await db.delete(_embeddingsTable);
+    await db.delete('thought_group_members');
+    await db.delete('thought_groups');
+    await db.delete(_tableName);
+  }
+
+  Future<void> importRawRows(
+    String table,
+    List<Map<String, dynamic>> rows,
+  ) async {
+    final db = await database;
+    final batch = db.batch();
+    for (final row in rows) {
+      batch.insert(table, row, conflictAlgorithm: ConflictAlgorithm.replace);
+    }
+    await batch.commit(noResult: true);
   }
 }
