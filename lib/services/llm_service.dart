@@ -3,13 +3,19 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/thought.dart';
 import '../models/chat_message.dart';
 import '../utils/constants.dart';
 import 'debug_logger.dart';
 
-enum LlmProvider { gemini, openai }
+enum LlmProvider { synapsePro, gemini, openai, local }
+
+typedef LocalLlmCallback = Future<String?> Function(
+  String prompt,
+  void Function(String) onChunk,
+);
 
 class LlmService {
   final _dbg = DebugLogger.instance;
@@ -34,18 +40,31 @@ class LlmService {
         return prefs.getString(AppConstants.geminiApiKeyPref);
       case LlmProvider.openai:
         return prefs.getString(AppConstants.openaiApiKeyPref);
+      case LlmProvider.synapsePro:
+      case LlmProvider.local:
+        return null;
     }
   }
 
   Future<LlmProvider> _getActiveProvider() async {
     final prefs = await SharedPreferences.getInstance();
     final provider = prefs.getString(AppConstants.llmProviderPref);
-    if (provider == 'openai') return LlmProvider.openai;
-    return LlmProvider.gemini;
+    switch (provider) {
+      case 'openai':
+        return LlmProvider.openai;
+      case 'synapsePro':
+        return LlmProvider.synapsePro;
+      case 'local':
+        return LlmProvider.local;
+      default:
+        return LlmProvider.gemini;
+    }
   }
 
   Future<bool> hasApiKey() async {
     final provider = await _getActiveProvider();
+    if (provider == LlmProvider.local) return true;
+    if (provider == LlmProvider.synapsePro) return false;
     final key = await _getApiKey(provider);
     return key != null && key.isNotEmpty;
   }
@@ -153,6 +172,7 @@ class LlmService {
     List<Thought> contextItems, {
     List<ChatMessage>? chatHistory,
   }) async {
+    _lastError = null;
     if (!await hasApiKey()) return null;
 
     _dbg.log('LLM', 'askQuestion with ${contextItems.length} context items');
@@ -425,6 +445,93 @@ VISUAL: <brief description of what is shown>''';
       ).timeout(const Duration(seconds: 120)),
       _extractGeminiText,
     );
+  }
+
+  // ── Image Generation (Imagen API) ──
+
+  static const _imageGenerationPrefixes = [
+    'generate image',
+    'generate an image',
+    'create image',
+    'create an image',
+    'draw ',
+    'make an image',
+    'make image',
+    'generate picture',
+    'create picture',
+    'paint ',
+    'illustrate ',
+    'sketch ',
+  ];
+
+  bool isImageGenerationRequest(String text) {
+    final lower = text.toLowerCase().trim();
+    return _imageGenerationPrefixes.any((p) => lower.startsWith(p));
+  }
+
+  Future<String?> generateImage(String prompt) async {
+    final provider = await _getActiveProvider();
+    if (provider != LlmProvider.gemini) {
+      _lastError = 'Image generation requires the Gemini provider.';
+      return null;
+    }
+    final apiKey = await _getApiKey(LlmProvider.gemini);
+    if (apiKey == null || apiKey.isEmpty) {
+      _lastError = 'No Gemini API key configured.';
+      return null;
+    }
+
+    try {
+      final url = 'https://generativelanguage.googleapis.com/v1beta/models/'
+          'imagen-3.0-generate-002:predict?key=$apiKey';
+      final body = jsonEncode({
+        'instances': [
+          {'prompt': prompt},
+        ],
+        'parameters': {'sampleCount': 1},
+      });
+
+      final response = await http.post(
+        Uri.parse(url),
+        headers: {'Content-Type': 'application/json'},
+        body: body,
+      ).timeout(const Duration(seconds: 60));
+
+      if (response.statusCode != 200) {
+        _lastError = 'Imagen API error ${response.statusCode}';
+        _dbg.log('LLM', 'Imagen error ${response.statusCode}: ${response.body}');
+        return null;
+      }
+
+      final data = jsonDecode(response.body);
+      final predictions = data['predictions'] as List?;
+      if (predictions == null || predictions.isEmpty) {
+        _lastError = 'Imagen returned no predictions.';
+        return null;
+      }
+
+      final b64 = predictions[0]['bytesBase64Encoded'] as String?;
+      final mimeType = (predictions[0]['mimeType'] as String?) ?? 'image/png';
+      if (b64 == null) {
+        _lastError = 'Imagen returned no image data.';
+        return null;
+      }
+
+      final ext = mimeType.contains('jpeg') ? 'jpg' : 'png';
+      final appDir = await getApplicationDocumentsDirectory();
+      final imgDir = Directory('${appDir.path}/generated_images');
+      if (!await imgDir.exists()) await imgDir.create(recursive: true);
+      final filePath = '${imgDir.path}/imagen_${DateTime.now().millisecondsSinceEpoch}.$ext';
+      final bytes = base64Decode(b64);
+      await File(filePath).writeAsBytes(bytes);
+
+      _dbg.log('LLM', 'Imagen saved ${bytes.length} bytes → $filePath');
+      return filePath;
+    } catch (e) {
+      _lastError = _friendlyError(e);
+      _dbg.log('LLM', 'Imagen error: $e');
+      return null;
+    }
   }
 
   // ── Prompt Helpers ──
@@ -741,10 +848,291 @@ Do NOT include "=== ITEM ===" headers.''';
     return 'other';
   }
 
+  // ── Streaming Q&A ──
+
+  Future<String?> askQuestionStreaming(
+    String question,
+    List<Thought> contextItems, {
+    List<ChatMessage>? chatHistory,
+    required void Function(String partialText) onChunk,
+  }) async {
+    _lastError = null;
+    if (!await hasApiKey()) return null;
+
+    final contextStr = contextItems.map((item) {
+      final parts = <String>[];
+      if (item.title != null) parts.add('Title: ${item.title}');
+      if (item.url != null) parts.add('URL: ${item.url}');
+      if (item.description != null) parts.add('Description: ${item.description}');
+      if (item.llmSummary != null) parts.add('Summary: ${item.llmSummary}');
+      if (item.extractedInfo != null) parts.add('Details: ${item.extractedInfo}');
+      if (item.ocrText != null) parts.add('OCR Text: ${item.ocrText}');
+      if (item.userNotes != null && item.userNotes!.isNotEmpty) {
+        parts.add('User Notes: ${item.userNotes}');
+      }
+      if (item.tags.isNotEmpty) parts.add('Tags: ${item.tags.join(", ")}');
+      parts.add('Category: ${item.category.label}');
+      return parts.join('\n');
+    }).join('\n---\n');
+
+    final historyStr = _buildConversationContext(chatHistory);
+    final prefs = await SharedPreferences.getInstance();
+    final persona = prefs.getString(AppConstants.ragPersonaPref) ?? 'balanced';
+    final personaInstruction = _personaInstruction(persona);
+
+    final prompt = '''You are Synapse, a personal assistant that ONLY answers 
+from the user's saved memories provided below. You must NEVER use outside 
+knowledge, training data, or information from the internet.
+$personaInstruction
+
+STRICT RULES:
+1. ONLY use facts, names, details, and recommendations found in the CONTEXT below.
+2. Do NOT supplement, expand, or enrich answers with your own knowledge.
+3. If the context contains partial information, share only what is available — 
+   do not fill in gaps with general knowledge.
+4. If the context does NOT contain relevant information, say: "I don't have 
+   information on that in your saved memories yet. Try saving some related 
+   posts or links first!"
+5. Never mention "context", "saved items", "memories", or "knowledge base" — 
+   just answer naturally as if you recall this from what the user shared.
+6. Use rich markdown formatting to make responses clear and scannable:
+   - **Headers** (##, ###) to organize sections.
+   - **Bold** and *italic* for emphasis.
+   - Bullet and numbered lists for steps or options.
+   - **Tables** whenever the user asks for tabulated data, or for comparisons,
+     itineraries, rankings, pricing, pros/cons, or any structured info.
+     ALWAYS use proper markdown pipe-table syntax with AT LEAST 2 columns.
+   - Blockquotes (>) for notable quotes or callouts.
+   - Inline code for specific names, commands, or identifiers.
+   - Horizontal rules (---) to separate major sections.
+7. When multiple context items are relevant, COMPARE and SYNTHESIZE across 
+   them. Highlight similarities, differences, trade-offs, and complementary 
+   details — don't just list items individually.
+8. If the user asks to compare, rank, or choose between items, draw on all 
+   relevant context items and provide a reasoned analysis.
+
+IMPORTANT: Search through ALL context items carefully. Information may 
+appear in titles, descriptions, summaries, extracted details, or OCR text.
+${historyStr.isNotEmpty ? '\nCONVERSATION SO FAR:\n$historyStr\n' : ''}
+CONTEXT:
+$contextStr
+
+QUESTION: $question''';
+
+    try {
+      final provider = await _getActiveProvider();
+      if (provider == LlmProvider.synapsePro) {
+        _lastError = 'Synapse Pro coming soon — use your own API key or local model.';
+        return null;
+      }
+      if (provider == LlmProvider.local) {
+        final localPrompt = _buildLocalPrompt(question, contextItems, chatHistory);
+        return await _callLocalStreaming(localPrompt, onChunk: onChunk);
+      }
+      final apiKey = await _getApiKey(provider);
+      if (apiKey == null || apiKey.isEmpty) return null;
+
+      switch (provider) {
+        case LlmProvider.gemini:
+          return await _callGeminiStreaming(apiKey, prompt, onChunk: onChunk);
+        case LlmProvider.openai:
+          return await _callOpenaiStreaming(apiKey, prompt, onChunk: onChunk);
+        case LlmProvider.synapsePro:
+        case LlmProvider.local:
+          return null;
+      }
+    } catch (e) {
+      _lastError = _friendlyError(e);
+      _dbg.log('LLM', 'streaming error: $e');
+      return null;
+    }
+  }
+
+  String _buildLocalPrompt(
+    String question,
+    List<Thought> contextItems,
+    List<ChatMessage>? chatHistory,
+  ) {
+    const maxPromptChars = 3000;
+
+    String _truncate(String s, int max) =>
+        s.length > max ? '${s.substring(0, max)}...' : s;
+
+    final topItems = contextItems.take(2);
+    final contextStr = topItems.map((item) {
+      final title = item.title ?? '';
+      final body = item.llmSummary ?? item.description ?? '';
+      return _truncate('$title — $body'.trim(), 400);
+    }).join('\n');
+
+    final recentHistory = chatHistory
+        ?.where((m) => !m.isSystem)
+        .toList()
+        .reversed
+        .take(2)
+        .toList()
+        .reversed;
+    final historyStr = recentHistory?.map((m) {
+      final role = m.isUser ? 'User' : 'Assistant';
+      return '$role: ${_truncate(m.text, 200)}';
+    }).join('\n') ?? '';
+
+    final buffer = StringBuffer();
+    buffer.writeln('Answer concisely using only the info below.');
+    if (contextStr.isNotEmpty) {
+      buffer.writeln('\nContext:\n$contextStr');
+    }
+    if (historyStr.isNotEmpty) {
+      buffer.writeln('\nRecent chat:\n$historyStr');
+    }
+    buffer.writeln('\nQuestion: $question');
+
+    var prompt = buffer.toString();
+    if (prompt.length > maxPromptChars) {
+      prompt = '${prompt.substring(0, maxPromptChars)}\n...';
+    }
+    return prompt;
+  }
+
+  LocalLlmCallback? onLocalLlmQuery;
+
+  Future<String?> _callLocalStreaming(
+    String prompt, {
+    required void Function(String) onChunk,
+  }) async {
+    if (onLocalLlmQuery == null) {
+      _lastError = 'Local model not initialized. Download a model in Settings.';
+      return null;
+    }
+    try {
+      return await onLocalLlmQuery!(prompt, onChunk);
+    } catch (e) {
+      _lastError = 'Local model error: $e';
+      _dbg.log('LLM', 'Local model streaming error: $e');
+      return null;
+    }
+  }
+
+  Future<String?> _callGeminiStreaming(
+    String apiKey,
+    String prompt, {
+    required void Function(String) onChunk,
+  }) async {
+    final geminiBaseUrl = await _getGeminiUrl();
+    final streamUrl = geminiBaseUrl.replaceFirst(':generateContent', ':streamGenerateContent');
+    final url = '$streamUrl?alt=sse&key=$apiKey';
+    final body = jsonEncode(_geminiBody(prompt: prompt, maxTokens: 2000));
+
+    final request = http.Request('POST', Uri.parse(url));
+    request.headers['Content-Type'] = 'application/json';
+    request.body = body;
+
+    final client = http.Client();
+    try {
+      final response = await client.send(request).timeout(const Duration(seconds: 90));
+      if (response.statusCode != 200) {
+        _lastError = 'Gemini streaming error ${response.statusCode}';
+        return null;
+      }
+
+      final buffer = StringBuffer();
+      await for (final chunk in response.stream.transform(utf8.decoder)) {
+        for (final line in chunk.split('\n')) {
+          if (!line.startsWith('data: ')) continue;
+          final jsonStr = line.substring(6).trim();
+          if (jsonStr.isEmpty) continue;
+          try {
+            final data = jsonDecode(jsonStr);
+            final text = data['candidates']?[0]?['content']?['parts']?[0]?['text'] as String?;
+            if (text != null && text.isNotEmpty) {
+              buffer.write(text);
+              onChunk(buffer.toString());
+            }
+          } catch (_) {}
+        }
+      }
+
+      final result = buffer.toString();
+      return result.isNotEmpty ? result : null;
+    } catch (e) {
+      _lastError = _friendlyError(e);
+      _dbg.log('LLM', 'Gemini streaming error: $e');
+      return null;
+    } finally {
+      client.close();
+    }
+  }
+
+  Future<String?> _callOpenaiStreaming(
+    String apiKey,
+    String prompt, {
+    required void Function(String) onChunk,
+  }) async {
+    final model = await _getOpenaiModel();
+    final body = jsonEncode({
+      'model': model,
+      'messages': [
+        {'role': 'system', 'content': _systemInstruction},
+        {'role': 'user', 'content': prompt},
+      ],
+      'temperature': 0.4,
+      'max_tokens': 2000,
+      'stream': true,
+    });
+
+    final request = http.Request('POST', Uri.parse(_openaiBaseUrl));
+    request.headers['Content-Type'] = 'application/json';
+    request.headers['Authorization'] = 'Bearer $apiKey';
+    request.body = body;
+
+    final client = http.Client();
+    try {
+      final response = await client.send(request).timeout(const Duration(seconds: 90));
+      if (response.statusCode != 200) {
+        _lastError = 'OpenAI streaming error ${response.statusCode}';
+        return null;
+      }
+
+      final buffer = StringBuffer();
+      await for (final chunk in response.stream.transform(utf8.decoder)) {
+        for (final line in chunk.split('\n')) {
+          if (!line.startsWith('data: ')) continue;
+          final jsonStr = line.substring(6).trim();
+          if (jsonStr == '[DONE]' || jsonStr.isEmpty) continue;
+          try {
+            final data = jsonDecode(jsonStr);
+            final delta = data['choices']?[0]?['delta']?['content'] as String?;
+            if (delta != null && delta.isNotEmpty) {
+              buffer.write(delta);
+              onChunk(buffer.toString());
+            }
+          } catch (_) {}
+        }
+      }
+
+      final result = buffer.toString();
+      return result.isNotEmpty ? result : null;
+    } catch (e) {
+      _lastError = _friendlyError(e);
+      _dbg.log('LLM', 'OpenAI streaming error: $e');
+      return null;
+    } finally {
+      client.close();
+    }
+  }
+
   // ── LLM Calls (raw text return) ──
 
   Future<String?> _callLlmRaw(String prompt, {int? maxTokens}) async {
     final provider = await _getActiveProvider();
+    if (provider == LlmProvider.synapsePro) {
+      _lastError = 'Synapse Pro coming soon — use your own API key or local model.';
+      return null;
+    }
+    if (provider == LlmProvider.local) {
+      _lastError = 'Local model does not support classification calls. Switch to Gemini or OpenAI.';
+      return null;
+    }
     final apiKey = await _getApiKey(provider);
     if (apiKey == null || apiKey.isEmpty) {
       _lastError = 'API key is empty.';
@@ -757,6 +1145,9 @@ Do NOT include "=== ITEM ===" headers.''';
           return await _callGeminiRaw(apiKey, prompt, maxTokens: maxTokens);
         case LlmProvider.openai:
           return await _callOpenaiRaw(apiKey, prompt, maxTokens: maxTokens);
+        case LlmProvider.synapsePro:
+        case LlmProvider.local:
+          return null;
       }
     } catch (e) {
       _lastError = _friendlyError(e);
@@ -946,11 +1337,17 @@ Do NOT include "=== ITEM ===" headers.''';
     return null;
   }
 
+  Future<String> _getOpenaiModel() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(AppConstants.openaiModelPref) ?? 'gpt-4o-mini';
+  }
+
   Future<String?> _callOpenaiRaw(String apiKey, String prompt, {int? maxTokens}) async {
     final tokens = maxTokens ?? 1200;
     final timeout = tokens > 2000 ? 90 : 45;
+    final model = await _getOpenaiModel();
     final body = jsonEncode({
-      'model': 'gpt-4o-mini',
+      'model': model,
       'messages': [
         {'role': 'system', 'content': _systemInstruction},
         {'role': 'user', 'content': prompt},
@@ -977,8 +1374,9 @@ Do NOT include "=== ITEM ===" headers.''';
     String prompt,
     String base64Image,
   ) async {
+    final model = await _getOpenaiModel();
     final body = jsonEncode({
-      'model': 'gpt-4o-mini',
+      'model': model,
       'messages': [
         {'role': 'system', 'content': _systemInstruction},
         {

@@ -11,7 +11,6 @@ import '../widgets/library_view.dart';
 import '../widgets/tutorial_overlay.dart';
 import 'add_thought_screen.dart';
 import 'pulse_screen.dart';
-import 'secrets_screen.dart';
 import 'settings_screen.dart';
 import 'thought_detail_screen.dart';
 import 'timeline_screen.dart';
@@ -27,16 +26,14 @@ class HomeScreen extends StatefulWidget {
 
 class HomeScreenState extends State<HomeScreen> {
   int _tab = 0;
-  bool _vaultVisited = false;
   bool _showTutorial = false;
 
   final _fabKey = GlobalKey();
   final _bottomNavKey = GlobalKey();
   final List<GlobalKey> _navItemKeys =
-      List.generate(6, (_) => GlobalKey());
+      List.generate(5, (_) => GlobalKey());
 
   void _switchTab(int i) {
-    if (i == 4 && !_vaultVisited) _vaultVisited = true;
     setState(() => _tab = i);
   }
 
@@ -45,7 +42,6 @@ class HomeScreenState extends State<HomeScreen> {
     _NavItem(Icons.auto_awesome_mosaic_outlined, Icons.auto_awesome_mosaic_rounded, 'Memories'),
     _NavItem(Icons.timeline_rounded, Icons.timeline_rounded, 'Recall'),
     _NavItem(Icons.monitor_heart_outlined, Icons.monitor_heart_rounded, 'Pulse'),
-    _NavItem(Icons.shield_outlined, Icons.shield_rounded, 'Vault'),
     _NavItem(Icons.tune_outlined, Icons.tune_rounded, 'Settings'),
   ];
 
@@ -135,22 +131,13 @@ class HomeScreenState extends State<HomeScreen> {
       ),
       TutorialStep(
         targetKey: _navItemKeys[4],
-        title: 'Vault — Secrets',
-        description:
-            'Store sensitive information behind biometric authentication. '
-            'Encrypted and secure, only accessible with your fingerprint or face.',
-        icon: Icons.shield_rounded,
-        onShow: () => _switchTab(3),
-      ),
-      TutorialStep(
-        targetKey: _navItemKeys[5],
         title: 'Settings',
         description:
             'Customize your theme, choose your AI model and persona, '
-            'set auto-delete rules, import/export data, and add API keys '
-            'for unlimited power.',
+            'set auto-delete rules, import/export data, add API keys, '
+            'and access the Vault for encrypted secrets.',
         icon: Icons.tune_rounded,
-        onShow: () => _switchTab(5),
+        onShow: () => _switchTab(4),
       ),
       TutorialStep(
         title: 'You\'re All Set!',
@@ -179,7 +166,6 @@ class HomeScreenState extends State<HomeScreen> {
       const LibraryView(),
       const TimelineScreen(),
       const PulseScreen(),
-      if (_vaultVisited) const SecretsScreen() else const SizedBox.shrink(),
       const SettingsScreen(),
     ];
 
@@ -302,129 +288,41 @@ class _BottomNav extends StatefulWidget {
 }
 
 class _BottomNavState extends State<_BottomNav> {
-  final _scrollCtrl = ScrollController();
-  bool _canScrollRight = true;
-  bool _canScrollLeft = false;
-
   bool get isDark => widget.isDark;
   int get currentIndex => widget.currentIndex;
 
   @override
-  void initState() {
-    super.initState();
-    _scrollCtrl.addListener(_onScroll);
-  }
-
-  @override
-  void dispose() {
-    _scrollCtrl.removeListener(_onScroll);
-    _scrollCtrl.dispose();
-    super.dispose();
-  }
-
-  void _onScroll() {
-    if (!_scrollCtrl.hasClients) return;
-    final pos = _scrollCtrl.position;
-    final newRight = pos.pixels < pos.maxScrollExtent - 4;
-    final newLeft = pos.pixels > 4;
-    if (newRight != _canScrollRight || newLeft != _canScrollLeft) {
-      setState(() {
-        _canScrollRight = newRight;
-        _canScrollLeft = newLeft;
-      });
-    }
-  }
-
-  @override
   Widget build(BuildContext context) {
     final bottomPad = MediaQuery.of(context).padding.bottom;
-    final screenWidth = MediaQuery.of(context).size.width;
-    final navBarWidth = screenWidth - 32;
-    const horizontalPad = 8.0;
-    final usableWidth = navBarWidth - horizontalPad * 2;
-    final itemWidth = usableWidth / 4.4;
 
-    return Container(
-      margin: EdgeInsets.fromLTRB(16, 0, 16, bottomPad + 10),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(32),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 40, sigmaY: 40),
-        child: Container(
-            padding: const EdgeInsets.symmetric(
-                vertical: 10, horizontal: horizontalPad),
-          decoration: BoxDecoration(
-              color: isDark
-                  ? Colors.black.withValues(alpha: 0.2)
-                  : Colors.white.withValues(alpha: 0.15),
-              borderRadius: BorderRadius.circular(32),
-              border: Border.all(
-                color: (isDark ? Colors.white : Colors.black)
-                    .withValues(alpha: 0.08),
+    return RepaintBoundary(
+      child: Container(
+        margin: EdgeInsets.fromLTRB(16, 0, 16, bottomPad + 10),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(32),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+              decoration: BoxDecoration(
+                color: isDark
+                    ? Colors.black.withValues(alpha: 0.2)
+                    : Colors.white.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(32),
+                border: Border.all(
+                  color: (isDark ? Colors.white : Colors.black)
+                      .withValues(alpha: 0.08),
+                ),
               ),
-            ),
-            child: Stack(
-              children: [
-                SingleChildScrollView(
-                  controller: _scrollCtrl,
-                  scrollDirection: Axis.horizontal,
-                  physics: const BouncingScrollPhysics(),
-                  child: Row(
-                    children: List.generate(
-                      HomeScreenState._navItems.length,
-                      (i) => SizedBox(
-                        key: widget.navItemKeys[i],
-                        width: itemWidth,
-                        child: _buildNavItem(i),
-                      ),
-                    ),
+              child: Row(
+                children: List.generate(
+                  HomeScreenState._navItems.length,
+                  (i) => Expanded(
+                    key: widget.navItemKeys[i],
+                    child: _buildNavItem(i),
                   ),
                 ),
-                Positioned(
-                  right: 0,
-                  top: 0,
-                  bottom: 0,
-                  child: _scrollChevron(
-                    icon: Icons.chevron_right_rounded,
-                    visible: _canScrollRight,
-                  ),
-                ),
-                Positioned(
-                  left: 0,
-                  top: 0,
-                  bottom: 0,
-                  child: _scrollChevron(
-                    icon: Icons.chevron_left_rounded,
-                    visible: _canScrollLeft,
               ),
-            ),
-          ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _scrollChevron({required IconData icon, required bool visible}) {
-    return IgnorePointer(
-      child: AnimatedOpacity(
-        opacity: visible ? 1.0 : 0.0,
-        duration: const Duration(milliseconds: 200),
-        child: Center(
-          child: Container(
-            width: 22,
-            height: 22,
-          decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: (isDark ? Colors.white : Colors.black)
-                  .withValues(alpha: 0.10),
-            ),
-            child: Icon(
-              icon,
-              size: 14,
-              color: (isDark ? Colors.white : Colors.black)
-                  .withValues(alpha: 0.45),
             ),
           ),
         ),
@@ -443,8 +341,6 @@ class _BottomNavState extends State<_BottomNav> {
       case 3:
         return isDark ? const Color(0xFF4DD0B8) : const Color(0xFF00897B);
       case 4:
-        return isDark ? const Color(0xFFEF9A9A) : const Color(0xFFD32F2F);
-      case 5:
         return isDark ? const Color(0xFFBF9EF7) : const Color(0xFF8B5BD8);
       default:
         return isDark ? SynapseColors.darkInk : SynapseColors.ink;

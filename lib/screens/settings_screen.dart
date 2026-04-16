@@ -9,6 +9,7 @@ import '../utils/permissions.dart';
 import '../providers/synapse_provider.dart' show SynapseProvider, AppThemeMode;
 import '../services/debug_logger.dart';
 import '../services/llm_service.dart';
+import '../services/local_llm_service.dart';
 import '../services/onboarding_service.dart';
 import '../services/share_handler_service.dart';
 import '../services/export_service.dart';
@@ -16,6 +17,7 @@ import '../models/thought.dart' show Thought, ThoughtType;
 import '../utils/constants.dart';
 import '../theme/app_theme.dart';
 import 'home_screen.dart';
+import 'secrets_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -27,9 +29,11 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> {
   final _geminiKeyController = TextEditingController();
   final _openaiKeyController = TextEditingController();
+  final _hfTokenController = TextEditingController();
   LlmProvider _selectedProvider = LlmProvider.gemini;
   bool _obscureGemini = true;
   bool _obscureOpenai = true;
+  bool _obscureHfToken = true;
   int _remainingCalls = 0;
   int? _autoDeleteDays;
   bool _isExporting = false;
@@ -37,8 +41,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _debugLog = false;
   bool _autoWire = true;
   bool _showTutorialOnStartup = false;
-  String _selectedModel = 'gemini-3.1-flash-lite-preview';
+  String _selectedGeminiModel = 'gemini-3.1-flash-lite-preview';
+  String _selectedOpenaiModel = 'gpt-4o-mini';
   String _ragPersona = 'balanced';
+  bool _localModelInstalled = false;
+  String? _localModelName;
+  String? _localModelSize;
+  bool _isDownloadingModel = false;
+  double _downloadProgress = 0.0;
 
   static const List<int?> _autoDeletePresets = [null, 7, 15, 30, 90, 180, 365];
 
@@ -75,14 +85,29 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final bgShare = prefs.getBool(AppConstants.backgroundSharePref) ?? false;
     final dbgLog = prefs.getBool(AppConstants.debugLogPref) ?? false;
     final autoWire = prefs.getBool(AppConstants.autoWirePref) ?? true;
-    final selectedModel = prefs.getString(AppConstants.geminiModelPref) ?? 'gemini-3.1-flash-lite-preview';
+    final geminiModel = prefs.getString(AppConstants.geminiModelPref) ?? 'gemini-3.1-flash-lite-preview';
+    final openaiModel = prefs.getString(AppConstants.openaiModelPref) ?? 'gpt-4o-mini';
     final ragPersona = prefs.getString(AppConstants.ragPersonaPref) ?? 'balanced';
     final tutorialOnStartup = await OnboardingService.instance.getShowOnStartup();
+    final localInstalled = await synapseProvider.localLlm.isModelInstalled();
+    final localName = await synapseProvider.localLlm.getInstalledModelName();
+    final localSize = await synapseProvider.localLlm.getInstalledModelSize();
+    final hfToken = prefs.getString(AppConstants.huggingFaceTokenPref) ?? '';
 
     if (!mounted) return;
 
     setState(() {
-      _selectedProvider = provider == 'openai' ? LlmProvider.openai : LlmProvider.gemini;
+      _hfTokenController.text = hfToken;
+      switch (provider) {
+        case 'openai':
+          _selectedProvider = LlmProvider.openai;
+        case 'synapsePro':
+          _selectedProvider = LlmProvider.synapsePro;
+        case 'local':
+          _selectedProvider = LlmProvider.local;
+        default:
+          _selectedProvider = LlmProvider.gemini;
+      }
       _geminiKeyController.text = geminiKey;
       _openaiKeyController.text = openaiKey;
       _remainingCalls = remaining;
@@ -91,8 +116,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _debugLog = dbgLog;
       _autoWire = autoWire;
       _showTutorialOnStartup = tutorialOnStartup;
-      _selectedModel = selectedModel;
+      _selectedGeminiModel = geminiModel;
+      _selectedOpenaiModel = openaiModel;
       _ragPersona = ragPersona;
+      _localModelInstalled = localInstalled;
+      _localModelName = localName;
+      _localModelSize = localSize;
     });
   }
 
@@ -106,6 +135,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _persistKeys(gemini, openai, providerName, synapseProvider);
     _geminiKeyController.dispose();
     _openaiKeyController.dispose();
+    _hfTokenController.dispose();
     super.dispose();
   }
 
@@ -180,6 +210,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
           _buildSectionTitle(theme, 'Appearance'),
           _buildThemeSelector(theme, colorScheme, isDark),
           const SizedBox(height: 32),
+          _buildSectionTitle(theme, 'Security'),
+          const SizedBox(height: 12),
+          _buildVaultCard(theme, colorScheme, isDark),
+          const SizedBox(height: 32),
           _buildSectionTitle(theme, 'Auto-Delete'),
           const SizedBox(height: 12),
           _buildAutoDeleteSelector(theme, colorScheme, isDark),
@@ -197,30 +231,60 @@ class _SettingsScreenState extends State<SettingsScreen> {
           _buildInfoCard(theme, colorScheme, isDark),
           const SizedBox(height: 16),
           _buildProviderSelector(theme, colorScheme, isDark),
-          const SizedBox(height: 16),
-          _buildModelSelector(theme, colorScheme, isDark),
+          if (_selectedProvider == LlmProvider.local) ...[
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Icon(Icons.info_outline_rounded,
+                    size: 13, color: SynapseColors.inkMuted),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    'Local models run on-device and may be slower and less accurate.',
+                    style: GoogleFonts.spaceGrotesk(
+                      fontSize: 11,
+                      color: SynapseColors.inkMuted,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+          if (_selectedProvider == LlmProvider.gemini ||
+              _selectedProvider == LlmProvider.openai) ...[
+            const SizedBox(height: 16),
+            _buildModelSelector(theme, colorScheme, isDark),
+          ],
           const SizedBox(height: 16),
           _buildPersonaSelector(theme, colorScheme, isDark),
-          const SizedBox(height: 20),
-          _buildApiKeyField(
-            theme: theme,
-            colorScheme: colorScheme,
-            label: 'Gemini API Key',
-            controller: _geminiKeyController,
-            obscure: _obscureGemini,
-            onToggle: () => setState(() => _obscureGemini = !_obscureGemini),
-            hint: 'AIzaSy...',
-          ),
-          const SizedBox(height: 16),
-          _buildApiKeyField(
-            theme: theme,
-            colorScheme: colorScheme,
-            label: 'OpenAI API Key',
-            controller: _openaiKeyController,
-            obscure: _obscureOpenai,
-            onToggle: () => setState(() => _obscureOpenai = !_obscureOpenai),
-            hint: 'sk-...',
-          ),
+          if (_selectedProvider == LlmProvider.gemini) ...[
+            const SizedBox(height: 20),
+            _buildApiKeyField(
+              theme: theme,
+              colorScheme: colorScheme,
+              label: 'Gemini API Key',
+              controller: _geminiKeyController,
+              obscure: _obscureGemini,
+              onToggle: () => setState(() => _obscureGemini = !_obscureGemini),
+              hint: 'AIzaSy...',
+            ),
+          ],
+          if (_selectedProvider == LlmProvider.openai) ...[
+            const SizedBox(height: 20),
+            _buildApiKeyField(
+              theme: theme,
+              colorScheme: colorScheme,
+              label: 'OpenAI API Key',
+              controller: _openaiKeyController,
+              obscure: _obscureOpenai,
+              onToggle: () => setState(() => _obscureOpenai = !_obscureOpenai),
+              hint: 'sk-...',
+            ),
+          ],
+          if (_selectedProvider == LlmProvider.local) ...[
+            const SizedBox(height: 16),
+            _buildLocalModelSection(theme, colorScheme, isDark),
+          ],
           const SizedBox(height: 24),
           FilledButton.icon(
             onPressed: _saveSettings,
@@ -362,6 +426,59 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildVaultCard(ThemeData theme, ColorScheme colorScheme, bool isDark) {
+    return GestureDetector(
+      onTap: () {
+        Navigator.push(
+          context,
+          SynapsePageRoute(builder: (_) => const SecretsScreen()),
+        );
+      },
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: isDark
+                ? [SynapseColors.darkCoral, SynapseColors.darkCard]
+                : [SynapseColors.coralLight, Colors.white],
+          ),
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: SynapseColors.error.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(Icons.shield_rounded,
+                  color: SynapseColors.error, size: 20),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Vault', style: theme.textTheme.titleMedium),
+                  const SizedBox(height: 2),
+                  Text(
+                    'Encrypted secrets protected by biometrics',
+                    style: theme.textTheme.bodySmall,
+                  ),
+                ],
+              ),
+            ),
+            Icon(Icons.chevron_right_rounded,
+                color: colorScheme.onSurface.withValues(alpha: 0.4)),
+          ],
         ),
       ),
     );
@@ -576,32 +693,68 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Widget _buildProviderSelector(ThemeData theme, ColorScheme colorScheme, bool isDark) {
-    return Container(
-      padding: const EdgeInsets.all(4),
-      decoration: SynapseDecoration.card(dark: isDark),
-      child: Row(
-        children: [
-          _providerOption(
-            label: 'Gemini',
-            isSelected: _selectedProvider == LlmProvider.gemini,
-            onTap: () => setState(() => _selectedProvider = LlmProvider.gemini),
-            colorScheme: colorScheme,
-          ),
-          _providerOption(
-            label: 'OpenAI',
-            isSelected: _selectedProvider == LlmProvider.openai,
-            onTap: () => setState(() => _selectedProvider = LlmProvider.openai),
-            colorScheme: colorScheme,
-          ),
-        ],
-      ),
+    return Column(
+      children: [
+        Row(
+          children: [
+            _providerCard(
+              icon: Icons.cloud_rounded,
+              label: 'Synapse Pro',
+              badge: 'Soon',
+              isSelected: _selectedProvider == LlmProvider.synapsePro,
+              onTap: () {
+                setState(() => _selectedProvider = LlmProvider.synapsePro);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Synapse Pro coming soon!')),
+                );
+              },
+              isDark: isDark,
+              colorScheme: colorScheme,
+            ),
+            const SizedBox(width: 8),
+            _providerCard(
+              icon: Icons.auto_awesome_rounded,
+              label: 'Gemini',
+              isSelected: _selectedProvider == LlmProvider.gemini,
+              onTap: () => setState(() => _selectedProvider = LlmProvider.gemini),
+              isDark: isDark,
+              colorScheme: colorScheme,
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            _providerCard(
+              icon: Icons.smart_toy_rounded,
+              label: 'OpenAI',
+              isSelected: _selectedProvider == LlmProvider.openai,
+              onTap: () => setState(() => _selectedProvider = LlmProvider.openai),
+              isDark: isDark,
+              colorScheme: colorScheme,
+            ),
+            const SizedBox(width: 8),
+            _providerCard(
+              icon: Icons.phone_android_rounded,
+              label: 'Local',
+              isSelected: _selectedProvider == LlmProvider.local,
+              onTap: () => setState(() => _selectedProvider = LlmProvider.local),
+              isDark: isDark,
+              colorScheme: colorScheme,
+            ),
+          ],
+        ),
+      ],
     );
   }
 
-  Widget _providerOption({
+  Widget _providerCard({
+    required IconData icon,
     required String label,
+    String? badge,
     required bool isSelected,
     required VoidCallback onTap,
+    required bool isDark,
     required ColorScheme colorScheme,
   }) {
     return Expanded(
@@ -609,18 +762,69 @@ class _SettingsScreenState extends State<SettingsScreen> {
         onTap: onTap,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
-          padding: const EdgeInsets.symmetric(vertical: 12),
+          padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
           decoration: BoxDecoration(
-            color: isSelected ? SynapseColors.ink : Colors.transparent,
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: Text(
-            label,
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontWeight: FontWeight.w600,
-              color: isSelected ? Colors.white : colorScheme.onSurface,
+            gradient: isSelected
+                ? LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: isDark
+                        ? [SynapseColors.darkLavender, SynapseColors.darkCard]
+                        : [const Color(0xFFF3EDFF), Colors.white],
+                  )
+                : null,
+            color: isSelected
+                ? null
+                : (isDark ? SynapseColors.darkCard : SynapseColors.lightCard),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: isSelected
+                  ? SynapseColors.accent.withValues(alpha: 0.4)
+                  : (isDark ? Colors.white : Colors.black).withValues(alpha: 0.04),
+              width: isSelected ? 1.5 : 1,
             ),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                icon,
+                size: 16,
+                color: isSelected ? SynapseColors.accent : SynapseColors.inkMuted,
+              ),
+              const SizedBox(width: 6),
+              Flexible(
+                child: Text(
+                  label,
+                  style: GoogleFonts.spaceGrotesk(
+                    fontSize: 12,
+                    fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                    color: isSelected
+                        ? (isDark ? SynapseColors.darkAccent : SynapseColors.accent)
+                        : colorScheme.onSurface,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              if (badge != null) ...[
+                const SizedBox(width: 4),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(
+                    badge,
+                    style: GoogleFonts.spaceGrotesk(
+                      fontSize: 8,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.orange,
+                    ),
+                  ),
+                ),
+              ],
+            ],
           ),
         ),
       ),
@@ -1142,10 +1346,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Widget _buildModelSelector(ThemeData theme, ColorScheme colorScheme, bool isDark) {
+    final currentModel = _selectedProvider == LlmProvider.gemini
+        ? _selectedGeminiModel
+        : _selectedOpenaiModel;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: (_selectedProvider == LlmProvider.gemini ? _geminiModels : _openaiModels).map((model) {
-        final isSelected = _selectedModel == model.id;
+        final isSelected = currentModel == model.id;
         final costColor = switch (model.cost) {
           'Very Low' => SynapseColors.success,
           'Low' => const Color(0xFF4CAF50),
@@ -1165,9 +1372,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
           padding: const EdgeInsets.only(bottom: 8),
           child: GestureDetector(
             onTap: () async {
-              setState(() => _selectedModel = model.id);
               final prefs = await SharedPreferences.getInstance();
-              await prefs.setString(AppConstants.geminiModelPref, model.id);
+              if (_selectedProvider == LlmProvider.gemini) {
+                setState(() => _selectedGeminiModel = model.id);
+                await prefs.setString(AppConstants.geminiModelPref, model.id);
+              } else {
+                setState(() => _selectedOpenaiModel = model.id);
+                await prefs.setString(AppConstants.openaiModelPref, model.id);
+              }
             },
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 200),
@@ -1271,6 +1483,373 @@ class _SettingsScreenState extends State<SettingsScreen> {
         );
       }).toList(),
     );
+  }
+
+  Widget _buildLocalModelSection(ThemeData theme, ColorScheme colorScheme, bool isDark) {
+    if (_isDownloadingModel) {
+      return Container(
+        padding: const EdgeInsets.all(20),
+        decoration: SynapseDecoration.card(dark: isDark),
+        child: Column(
+          children: [
+            Icon(Icons.downloading_rounded,
+                size: 32, color: SynapseColors.accent),
+            const SizedBox(height: 16),
+            Text(
+              'Downloading model...',
+              style: GoogleFonts.spaceGrotesk(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: isDark ? SynapseColors.darkInk : SynapseColors.ink,
+              ),
+            ),
+            const SizedBox(height: 12),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: LinearProgressIndicator(
+                value: _downloadProgress,
+                minHeight: 8,
+                backgroundColor: isDark
+                    ? Colors.white.withValues(alpha: 0.05)
+                    : SynapseColors.lavenderLight,
+                color: SynapseColors.accent,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              '${(_downloadProgress * 100).toStringAsFixed(1)}%',
+              style: GoogleFonts.spaceGrotesk(
+                fontSize: 12,
+                color: SynapseColors.inkMuted,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (_localModelInstalled) {
+      return Container(
+        padding: const EdgeInsets.all(16),
+        decoration: SynapseDecoration.card(dark: isDark),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: SynapseColors.success.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(Icons.check_circle_rounded,
+                      color: SynapseColors.success, size: 20),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _localModelName ?? 'Local Model',
+                        style: theme.textTheme.titleMedium,
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'Installed (${_localModelSize ?? "unknown size"})',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: SynapseColors.success,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: _confirmDeleteModel,
+                icon: Icon(Icons.delete_rounded,
+                    size: 16, color: SynapseColors.error),
+                label: Text(
+                  'Delete Model',
+                  style: TextStyle(color: SynapseColors.error),
+                ),
+                style: OutlinedButton.styleFrom(
+                  side: BorderSide(
+                    color: SynapseColors.error.withValues(alpha: 0.3),
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Column(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: SynapseDecoration.card(dark: isDark),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.key_rounded, size: 16, color: SynapseColors.accent),
+                  const SizedBox(width: 8),
+                  Text(
+                    'HuggingFace Token',
+                    style: theme.textTheme.titleMedium?.copyWith(fontSize: 14),
+                  ),
+                  const SizedBox(width: 4),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                    decoration: BoxDecoration(
+                      color: SynapseColors.error.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Text(
+                      'Required',
+                      style: GoogleFonts.spaceGrotesk(
+                        fontSize: 9,
+                        fontWeight: FontWeight.w600,
+                        color: SynapseColors.error,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Get a free token at huggingface.co/settings/tokens',
+                style: GoogleFonts.spaceGrotesk(
+                  fontSize: 11,
+                  color: SynapseColors.inkMuted,
+                ),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: _hfTokenController,
+                obscureText: _obscureHfToken,
+                style: GoogleFonts.spaceGrotesk(fontSize: 13),
+                decoration: InputDecoration(
+                  hintText: 'hf_...',
+                  isDense: true,
+                  suffixIcon: IconButton(
+                    icon: Icon(
+                      _obscureHfToken
+                          ? Icons.visibility_rounded
+                          : Icons.visibility_off_rounded,
+                      color: colorScheme.onSurface.withValues(alpha: 0.4),
+                      size: 20,
+                    ),
+                    onPressed: () =>
+                        setState(() => _obscureHfToken = !_obscureHfToken),
+                  ),
+                ),
+                onChanged: (_) async {
+                  final prefs = await SharedPreferences.getInstance();
+                  await prefs.setString(
+                    AppConstants.huggingFaceTokenPref,
+                    _hfTokenController.text.trim(),
+                  );
+                },
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 8),
+        ...LocalModelChoice.values.map((choice) {
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: Container(
+            padding: const EdgeInsets.all(16),
+            decoration: SynapseDecoration.card(dark: isDark),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: isDark
+                        ? SynapseColors.darkLavender
+                        : SynapseColors.lavenderLight,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(Icons.memory_rounded,
+                      color: SynapseColors.accent, size: 20),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        choice.displayName,
+                        style: theme.textTheme.titleMedium,
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        choice.sizeLabel,
+                        style: theme.textTheme.bodySmall,
+                      ),
+                    ],
+                  ),
+                ),
+                FilledButton(
+                  onPressed: () => _downloadModel(choice),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: SynapseColors.accent,
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 8),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                  child: const Text('Download', style: TextStyle(fontSize: 12)),
+                ),
+              ],
+            ),
+          ),
+        );
+      }),
+        Padding(
+          padding: const EdgeInsets.only(top: 4),
+          child: Row(
+            children: [
+              Icon(Icons.wifi_rounded,
+                  size: 14, color: SynapseColors.inkMuted),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  'Download only happens once. Use Wi-Fi recommended.',
+                  style: GoogleFonts.spaceGrotesk(
+                    fontSize: 11,
+                    color: SynapseColors.inkMuted,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _downloadModel(LocalModelChoice choice) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Download ${choice.displayName}?'),
+        content: Text(
+          'This will download ${choice.sizeLabel} to your device. '
+          'Make sure you have enough storage and a good internet connection.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Download'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    setState(() {
+      _isDownloadingModel = true;
+      _downloadProgress = 0.0;
+    });
+
+    try {
+      final localLlm = context.read<SynapseProvider>().localLlm;
+      await localLlm.downloadModel(
+        choice,
+        onProgress: (progress) {
+          if (mounted) {
+            setState(() => _downloadProgress = progress);
+          }
+        },
+      );
+      if (mounted) {
+        setState(() {
+          _localModelInstalled = true;
+          _localModelName = choice.displayName;
+          _localModelSize = choice.sizeLabel;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('${choice.displayName} installed successfully!')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Download failed: $e')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isDownloadingModel = false);
+      }
+    }
+  }
+
+  Future<void> _confirmDeleteModel() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete local model?'),
+        content: const Text(
+          'This will remove the downloaded model from your device. '
+          'You can always re-download it later.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: FilledButton.styleFrom(backgroundColor: SynapseColors.error),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    try {
+      final localLlm = context.read<SynapseProvider>().localLlm;
+      await localLlm.deleteModel();
+      if (mounted) {
+        setState(() {
+          _localModelInstalled = false;
+          _localModelName = null;
+          _localModelSize = null;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Model deleted.')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to delete model: $e')),
+        );
+      }
+    }
   }
 
   Widget _buildPersonaSelector(ThemeData theme, ColorScheme colorScheme, bool isDark) {
@@ -1453,7 +2032,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
 
     await prefs.setBool(AppConstants.autoWirePref, _autoWire);
-    await prefs.setString(AppConstants.geminiModelPref, _selectedModel);
+    await prefs.setString(AppConstants.geminiModelPref, _selectedGeminiModel);
+    await prefs.setString(AppConstants.openaiModelPref, _selectedOpenaiModel);
+    final hfToken = _hfTokenController.text.trim();
+    if (hfToken.isNotEmpty) {
+      await prefs.setString(AppConstants.huggingFaceTokenPref, hfToken);
+    }
 
     if (newGeminiKey.isNotEmpty && newGeminiKey != oldGeminiKey && mounted) {
       final provider = context.read<SynapseProvider>();

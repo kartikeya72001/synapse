@@ -3,12 +3,14 @@ import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
 import '../models/thought.dart';
 import '../models/chat_message.dart';
+import '../models/chat_conversation.dart';
 
 class DatabaseService {
   static Database? _database;
   static const String _tableName = 'thoughts';
   static const String _chatTable = 'chat_messages';
   static const String _embeddingsTable = 'embeddings';
+  static const String _conversationsTable = 'chat_conversations';
 
   Future<Database> get database async {
     if (_database != null) return _database!;
@@ -36,7 +38,19 @@ class DatabaseService {
       text TEXT NOT NULL,
       role TEXT NOT NULL,
       thoughtId TEXT,
-      timestamp TEXT NOT NULL
+      timestamp TEXT NOT NULL,
+      conversationId TEXT,
+      imagePath TEXT
+    )
+  ''';
+
+  static const String _createConversationsTableSql = '''
+    CREATE TABLE IF NOT EXISTS $_conversationsTable (
+      id TEXT PRIMARY KEY,
+      title TEXT NOT NULL,
+      createdAt TEXT NOT NULL,
+      updatedAt TEXT NOT NULL,
+      isSaved INTEGER DEFAULT 0
     )
   ''';
 
@@ -46,7 +60,7 @@ class DatabaseService {
 
     return await openDatabase(
       path,
-      version: 8,
+      version: 9,
       onCreate: (db, version) async {
         await db.execute('''
           CREATE TABLE $_tableName (
@@ -94,6 +108,10 @@ class DatabaseService {
         ''');
         await db.execute(_createChatTableSql);
         await db.execute(_createEmbeddingsTableSql);
+        await db.execute(_createConversationsTableSql);
+        await db.execute(
+          'CREATE INDEX IF NOT EXISTS idx_chat_conv ON $_chatTable(conversationId)',
+        );
       },
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 2) {
@@ -156,6 +174,35 @@ class DatabaseService {
           try {
             await db.execute('ALTER TABLE $_tableName ADD COLUMN userNotes TEXT');
           } catch (_) {}
+        }
+        if (oldVersion < 9) {
+          await db.execute(_createConversationsTableSql);
+          for (final col in ['conversationId TEXT', 'imagePath TEXT']) {
+            try {
+              await db.execute('ALTER TABLE $_chatTable ADD COLUMN $col');
+            } catch (_) {}
+          }
+          await db.execute(
+            'CREATE INDEX IF NOT EXISTS idx_chat_conv ON $_chatTable(conversationId)',
+          );
+          // Migrate existing messages into a "Legacy Chat" conversation
+          final existing = await db.rawQuery('SELECT COUNT(*) as c FROM $_chatTable');
+          final count = Sqflite.firstIntValue(existing) ?? 0;
+          if (count > 0) {
+            const legacyId = 'legacy-conversation';
+            final now = DateTime.now().toIso8601String();
+            await db.insert(_conversationsTable, {
+              'id': legacyId,
+              'title': 'Previous Chat',
+              'createdAt': now,
+              'updatedAt': now,
+              'isSaved': 0,
+            });
+            await db.rawUpdate(
+              'UPDATE $_chatTable SET conversationId = ? WHERE conversationId IS NULL',
+              [legacyId],
+            );
+          }
         }
       },
     );
@@ -276,6 +323,82 @@ class DatabaseService {
         SELECT id FROM $_chatTable ORDER BY timestamp DESC LIMIT ?
       )
     ''', [maxCount]);
+  }
+
+  // ── Conversations ──
+
+  Future<void> insertConversation(ChatConversation conversation) async {
+    final db = await database;
+    await db.insert(
+      _conversationsTable,
+      conversation.toMap(),
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  Future<void> updateConversation(ChatConversation conversation) async {
+    final db = await database;
+    await db.update(
+      _conversationsTable,
+      conversation.toMap(),
+      where: 'id = ?',
+      whereArgs: [conversation.id],
+    );
+  }
+
+  Future<void> deleteConversation(String id) async {
+    final db = await database;
+    await db.delete(_chatTable, where: 'conversationId = ?', whereArgs: [id]);
+    await db.delete(_conversationsTable, where: 'id = ?', whereArgs: [id]);
+  }
+
+  Future<List<ChatConversation>> getAllConversations() async {
+    final db = await database;
+    final maps = await db.query(
+      _conversationsTable,
+      orderBy: 'updatedAt DESC',
+    );
+    return maps.map((m) => ChatConversation.fromMap(m)).toList();
+  }
+
+  Future<List<ChatMessage>> getConversationMessages(String conversationId) async {
+    final db = await database;
+    final maps = await db.query(
+      _chatTable,
+      where: 'conversationId = ?',
+      whereArgs: [conversationId],
+      orderBy: 'timestamp ASC',
+    );
+    return maps.map((m) => ChatMessage.fromMap(m)).toList();
+  }
+
+  Future<void> purgeOldestUnsavedConversations(int maxCount) async {
+    final db = await database;
+    await db.rawDelete('''
+      DELETE FROM $_chatTable WHERE conversationId IN (
+        SELECT id FROM $_conversationsTable
+        WHERE isSaved = 0
+        AND id NOT IN (
+          SELECT id FROM $_conversationsTable ORDER BY updatedAt DESC LIMIT ?
+        )
+      )
+    ''', [maxCount]);
+    await db.rawDelete('''
+      DELETE FROM $_conversationsTable
+      WHERE isSaved = 0
+      AND id NOT IN (
+        SELECT id FROM $_conversationsTable ORDER BY updatedAt DESC LIMIT ?
+      )
+    ''', [maxCount]);
+  }
+
+  Future<void> clearConversationMessages(String conversationId) async {
+    final db = await database;
+    await db.delete(
+      _chatTable,
+      where: 'conversationId = ?',
+      whereArgs: [conversationId],
+    );
   }
 
   // ── Embeddings (chunk-level) ──

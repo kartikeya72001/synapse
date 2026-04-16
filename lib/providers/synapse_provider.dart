@@ -4,12 +4,14 @@ import 'package:uuid/uuid.dart';
 import '../models/thought.dart';
 import '../models/thought_group.dart';
 import '../models/chat_message.dart';
+import '../models/chat_conversation.dart';
 import '../services/database_service.dart';
 import '../services/group_service.dart';
 import '../services/llm_service.dart';
 import '../services/classification_service.dart';
 import '../services/dead_link_service.dart';
 import '../services/vector_search_service.dart';
+import '../services/local_llm_service.dart';
 import '../utils/constants.dart';
 import '../utils/url_utils.dart' as url_utils;
 import '../services/debug_logger.dart';
@@ -35,6 +37,7 @@ class SynapseProvider extends ChangeNotifier {
   final LlmService _llm = LlmService();
   final DeadLinkService _deadLinkService = DeadLinkService();
   final VectorSearchService _vectorSearch = VectorSearchService();
+  final LocalLlmService _localLlm = LocalLlmService();
   final _dbg = DebugLogger.instance;
   late final GroupService _groupService;
   late final ClassificationService _classification;
@@ -79,6 +82,8 @@ class SynapseProvider extends ChangeNotifier {
   // Chat state
   List<ChatMessage> _chatMessages = [];
   bool _isChatLoading = false;
+  List<ChatConversation> _conversations = [];
+  String? _currentConversationId;
 
   // Tab / navigation state
   Thought? _pendingSharedThought;
@@ -87,9 +92,14 @@ class SynapseProvider extends ChangeNotifier {
     _pendingSharedThought = null;
   }
 
+  LocalLlmService get localLlm => _localLlm;
+
   SynapseProvider() {
     _groupService = GroupService(() => _db.database);
     _classification = ClassificationService(_llm);
+    _llm.onLocalLlmQuery = (prompt, onChunk) async {
+      return await _localLlm.askQuestionStreaming(prompt, onChunk);
+    };
   }
 
   List<Thought> get items =>
@@ -122,6 +132,14 @@ class SynapseProvider extends ChangeNotifier {
   bool get isCheckingDeadLinks => _isCheckingDeadLinks;
   List<ChatMessage> get chatMessages => _chatMessages;
   bool get isChatLoading => _isChatLoading;
+  List<ChatConversation> get conversations => _conversations;
+  String? get currentConversationId => _currentConversationId;
+  ChatConversation? get currentConversation =>
+      _currentConversationId == null
+          ? null
+          : _conversations
+              .cast<ChatConversation?>()
+              .firstWhere((c) => c!.id == _currentConversationId, orElse: () => null);
 
   int get unclassifiedCount => _items.where((i) => !i.isClassified).length;
   String? get lastLlmError => _llm.lastError;
@@ -130,7 +148,7 @@ class SynapseProvider extends ChangeNotifier {
     await _loadThemeMode();
     await loadThoughts();
     await loadGroups();
-    await loadChatMessages();
+    await loadConversations();
     _purgeExpiredThoughts();
     _checkDeadLinksIfNeeded();
     _indexEmbeddingsInBackground();
@@ -500,44 +518,138 @@ class SynapseProvider extends ChangeNotifier {
     await updateThought(updated);
   }
 
-  // ── Chat ──
+  // ── Conversations & Chat ──
 
-  Future<void> loadChatMessages() async {
-    _chatMessages = await _db.getAllChatMessages();
-    if (_chatMessages.isEmpty) {
-      final welcome = ChatMessage(
-        id: const Uuid().v4(),
-        text: "I'm the Synapse cortex. Share links and posts from any app, "
-            "then ask me anything about them.",
-        role: ChatMessageRole.assistant,
-      );
-      await _db.insertChatMessage(welcome);
-      _chatMessages = [welcome];
+  static const int _maxConversations = 64;
+
+  Future<void> loadConversations() async {
+    _conversations = await _db.getAllConversations();
+    if (_conversations.isEmpty) {
+      await createNewConversation(silent: true);
+    } else {
+      _currentConversationId = _conversations.first.id;
+      _chatMessages = await _db.getConversationMessages(_currentConversationId!);
     }
+    notifyListeners();
+  }
+
+  Future<void> createNewConversation({bool silent = false}) async {
+    final now = DateTime.now();
+    final conversation = ChatConversation(
+      id: const Uuid().v4(),
+      title: 'New Chat',
+      createdAt: now,
+      updatedAt: now,
+    );
+    await _db.insertConversation(conversation);
+    await _db.purgeOldestUnsavedConversations(_maxConversations);
+    _conversations = await _db.getAllConversations();
+    _currentConversationId = conversation.id;
+    _chatMessages = [];
+    if (!silent) notifyListeners();
+  }
+
+  Future<void> switchConversation(String id) async {
+    if (id == _currentConversationId) return;
+    _currentConversationId = id;
+    _chatMessages = await _db.getConversationMessages(id);
+    notifyListeners();
+  }
+
+  Future<void> toggleSaveConversation(String id) async {
+    final idx = _conversations.indexWhere((c) => c.id == id);
+    if (idx == -1) return;
+    final updated = _conversations[idx].copyWith(
+      isSaved: !_conversations[idx].isSaved,
+      updatedAt: DateTime.now(),
+    );
+    await _db.updateConversation(updated);
+    _conversations[idx] = updated;
+    notifyListeners();
+  }
+
+  Future<void> deleteConversation(String id) async {
+    await _db.deleteConversation(id);
+    _conversations.removeWhere((c) => c.id == id);
+    if (_currentConversationId == id) {
+      if (_conversations.isNotEmpty) {
+        _currentConversationId = _conversations.first.id;
+        _chatMessages = await _db.getConversationMessages(_currentConversationId!);
+      } else {
+        await createNewConversation();
+      }
+    }
+    notifyListeners();
+  }
+
+  Future<void> renameConversation(String id, String newTitle) async {
+    final idx = _conversations.indexWhere((c) => c.id == id);
+    if (idx == -1) return;
+    final updated = _conversations[idx].copyWith(
+      title: newTitle,
+      updatedAt: DateTime.now(),
+    );
+    await _db.updateConversation(updated);
+    _conversations[idx] = updated;
     notifyListeners();
   }
 
   Future<void> addChatMessage(ChatMessage message) async {
-    _chatMessages.add(message);
-    await _db.insertChatMessage(message);
-    notifyListeners();
-    _trimChatIfNeeded();
-  }
+    final msg = ChatMessage(
+      id: message.id,
+      text: message.text,
+      role: message.role,
+      timestamp: message.timestamp,
+      conversationId: _currentConversationId,
+      imagePath: message.imagePath,
+    );
+    _chatMessages.add(msg);
+    await _db.insertChatMessage(msg);
 
-  Future<void> _trimChatIfNeeded() async {
-    if (_chatMessages.length > AppConstants.maxChatHistory + 10) {
-      await _db.trimChatMessages(AppConstants.maxChatHistory);
-      _chatMessages = await _db.getAllChatMessages();
+    // Update conversation's updatedAt
+    if (_currentConversationId != null) {
+      final idx = _conversations.indexWhere((c) => c.id == _currentConversationId);
+      if (idx != -1) {
+        final updated = _conversations[idx].copyWith(updatedAt: DateTime.now());
+        _conversations[idx] = updated;
+        await _db.updateConversation(updated);
+      }
     }
+    notifyListeners();
   }
 
-  Future<void> sendChatMessage(String text) async {
+  Future<void> _autoTitleCurrentConversation(String firstUserMessage) async {
+    if (_currentConversationId == null) return;
+    final idx = _conversations.indexWhere((c) => c.id == _currentConversationId);
+    if (idx == -1) return;
+    if (_conversations[idx].title != 'New Chat') return;
+    final title = firstUserMessage.length > 40
+        ? '${firstUserMessage.substring(0, 40)}...'
+        : firstUserMessage;
+    final updated = _conversations[idx].copyWith(
+      title: title,
+      updatedAt: DateTime.now(),
+    );
+    await _db.updateConversation(updated);
+    _conversations[idx] = updated;
+  }
+
+  Future<void> sendChatMessage(
+    String text, {
+    void Function(String partialText)? onStreamChunk,
+  }) async {
     final userMsg = ChatMessage(
       id: const Uuid().v4(),
       text: text,
       role: ChatMessageRole.user,
     );
     await addChatMessage(userMsg);
+
+    // Auto-title on first user message
+    final userMessages = _chatMessages.where((m) => m.isUser).toList();
+    if (userMessages.length == 1) {
+      await _autoTitleCurrentConversation(text);
+    }
 
     _isChatLoading = true;
     notifyListeners();
@@ -553,9 +665,29 @@ class SynapseProvider extends ChangeNotifier {
       return;
     }
 
+    // Image generation intent detection
+    if (_llm.isImageGenerationRequest(text)) {
+      final imagePath = await _llm.generateImage(text);
+      _isChatLoading = false;
+      if (imagePath != null) {
+        await addChatMessage(ChatMessage(
+          id: const Uuid().v4(),
+          text: '![Generated Image]($imagePath)',
+          role: ChatMessageRole.assistant,
+          imagePath: imagePath,
+        ));
+      } else {
+        await addChatMessage(ChatMessage(
+          id: const Uuid().v4(),
+          text: _llm.lastError ?? "Couldn't generate that image. Try rephrasing.",
+          role: ChatMessageRole.assistant,
+        ));
+      }
+      return;
+    }
+
     _dbg.log('RAG', 'query="${text.substring(0, text.length.clamp(0, 60))}"');
     List<Thought> contextItems;
-    // Use hierarchical search when there are enough memories for category clustering
     final scored = _items.length >= 20
         ? await _vectorSearch.hierarchicalSearch(text, _items)
         : await _vectorSearch.search(text, _items);
@@ -570,27 +702,41 @@ class SynapseProvider extends ChangeNotifier {
           '${contextItems.length} most recent items (capped at $fallbackCap)');
     }
 
-    final answer = await _llm.askQuestion(text, contextItems, chatHistory: _chatMessages);
+    String? answer;
+    try {
+      if (onStreamChunk != null) {
+        answer = await _llm.askQuestionStreaming(
+          text,
+          contextItems,
+          chatHistory: _chatMessages,
+          onChunk: onStreamChunk,
+        );
+      } else {
+        answer = await _llm.askQuestion(text, contextItems, chatHistory: _chatMessages);
+      }
+    } catch (e) {
+      _dbg.log('CHAT', 'LLM error: $e');
+      answer = null;
+    }
     _isChatLoading = false;
+
+    final errorDetail = _llm.lastError;
+    final fallbackMsg = errorDetail != null && errorDetail.isNotEmpty
+        ? errorDetail
+        : "Signal lost. The cortex couldn't process that. Try rewording.";
 
     await addChatMessage(ChatMessage(
       id: const Uuid().v4(),
-      text: answer ?? "Signal lost. The cortex couldn't process that. Try rewording.",
+      text: answer ?? fallbackMsg,
       role: ChatMessageRole.assistant,
     ));
   }
 
   Future<void> clearChat() async {
-    await _db.clearChatMessages();
+    if (_currentConversationId != null) {
+      await _db.clearConversationMessages(_currentConversationId!);
+    }
     _chatMessages = [];
-    final welcome = ChatMessage(
-      id: const Uuid().v4(),
-      text: "I'm the Synapse cortex. Share links and posts from any app, "
-          "then ask me anything about them.",
-      role: ChatMessageRole.assistant,
-    );
-    await _db.insertChatMessage(welcome);
-    _chatMessages = [welcome];
     notifyListeners();
   }
 

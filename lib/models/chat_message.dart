@@ -5,12 +5,16 @@ class ChatMessage {
   final String text;
   final ChatMessageRole role;
   final DateTime timestamp;
+  final String? conversationId;
+  final String? imagePath;
 
   ChatMessage({
     required this.id,
     required this.text,
     required this.role,
     DateTime? timestamp,
+    this.conversationId,
+    this.imagePath,
   }) : timestamp = timestamp ?? DateTime.now();
 
   bool get isUser => role == ChatMessageRole.user;
@@ -23,6 +27,8 @@ class ChatMessage {
       'text': text,
       'role': role.name,
       'timestamp': timestamp.toIso8601String(),
+      'conversationId': conversationId,
+      'imagePath': imagePath,
     };
   }
 
@@ -35,6 +41,8 @@ class ChatMessage {
         orElse: () => ChatMessageRole.assistant,
       ),
       timestamp: DateTime.parse(map['timestamp'] as String),
+      conversationId: map['conversationId'] as String?,
+      imagePath: map['imagePath'] as String?,
     );
   }
 }

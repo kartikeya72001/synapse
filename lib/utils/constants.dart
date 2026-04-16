@@ -16,9 +16,14 @@ class AppConstants {
   static const String debugLogPref = 'debug_log_enabled';
   static const String autoWirePref = 'auto_wire_on_share';
   static const String geminiModelPref = 'gemini_model';
+  static const String openaiModelPref = 'openai_model';
   static const String ragPersonaPref = 'rag_persona';
   static const String onboardingCompletedPref = 'onboarding_completed';
   static const String onboardingShowOnStartupPref = 'onboarding_show_on_startup';
+  static const String localModelInstalledPref = 'local_model_installed';
+  static const String localModelNamePref = 'local_model_name';
+  static const String localModelSizePref = 'local_model_size';
+  static const String huggingFaceTokenPref = 'hugging_face_token';
 
   static const int maxFreeLlmCalls = 2;
   static const int maxChatHistory = 50;

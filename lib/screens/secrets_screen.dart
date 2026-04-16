@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 import 'package:timeago/timeago.dart' as timeago;
+import 'package:uuid/uuid.dart';
 import '../models/secret_item.dart';
+import '../models/thought.dart';
+import '../providers/synapse_provider.dart';
 import '../services/secret_service.dart';
 import '../theme/app_theme.dart';
 
@@ -59,18 +63,21 @@ class _SecretsScreenState extends State<SecretsScreen> {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
 
-    return Container(
-      decoration: BoxDecoration(
-        gradient: isDark ? SynapseGradients.vaultBgDark : SynapseGradients.vaultBg,
-      ),
-      child: SafeArea(
-        bottom: false,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildHeader(isDark, theme, colorScheme),
-            Expanded(child: _buildBody(isDark, theme, colorScheme)),
-          ],
+    return Scaffold(
+      backgroundColor: Colors.transparent,
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: isDark ? SynapseGradients.vaultBgDark : SynapseGradients.vaultBg,
+        ),
+        child: SafeArea(
+          bottom: false,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildHeader(isDark, theme, colorScheme),
+              Expanded(child: _buildBody(isDark, theme, colorScheme)),
+            ],
+          ),
         ),
       ),
     );
@@ -81,6 +88,22 @@ class _SecretsScreenState extends State<SecretsScreen> {
       padding: const EdgeInsets.fromLTRB(24, 14, 16, 10),
       child: Row(
         children: [
+          GestureDetector(
+            onTap: () => Navigator.of(context).pop(),
+            child: Container(
+              padding: const EdgeInsets.all(8),
+              margin: const EdgeInsets.only(right: 12),
+              decoration: BoxDecoration(
+                color: SynapseColors.ink.withValues(alpha: 0.04),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(
+                Icons.arrow_back_rounded,
+                size: 18,
+                color: isDark ? SynapseColors.darkInk : SynapseColors.ink,
+              ),
+            ),
+          ),
           Text(
             'Vault',
             style: GoogleFonts.spaceGrotesk(
@@ -295,6 +318,16 @@ class _SecretsScreenState extends State<SecretsScreen> {
                 PopupMenuButton<String>(
                   onSelected: (action) => _handleAction(action, secret),
                   itemBuilder: (_) => [
+                    const PopupMenuItem(
+                      value: 'push',
+                      child: Row(
+                        children: [
+                          Icon(Icons.upload_rounded, size: 18),
+                          SizedBox(width: 8),
+                          Text('Push to Memories'),
+                        ],
+                      ),
+                    ),
                     const PopupMenuItem(value: 'edit', child: Text('Edit')),
                     const PopupMenuItem(value: 'delete', child: Text('Delete')),
                   ],
@@ -427,7 +460,104 @@ class _SecretsScreenState extends State<SecretsScreen> {
         _showEditDialog(secret);
       case 'delete':
         _confirmDelete(secret);
+      case 'push':
+        _confirmPushToMemories(secret);
     }
+  }
+
+  void _confirmPushToMemories(SecretItem secret) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Push to Memories?'),
+        content: Text(
+          'Move "${secret.title}" out of the vault into your regular memories? '
+          'The decrypted value will be stored as a note. '
+          'Biometric verification is required.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          FilledButton.icon(
+            onPressed: () async {
+              Navigator.pop(ctx);
+              await _pushToMemories(secret);
+            },
+            icon: const Icon(Icons.fingerprint_rounded, size: 18),
+            label: const Text('Verify & Push'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _pushToMemories(SecretItem secret) async {
+    final reAuth = await _secretService.authenticate();
+    if (!reAuth) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Biometric verification failed.')),
+        );
+      }
+      return;
+    }
+
+    final decrypted = await _secretService.decryptValue(secret.encryptedValue);
+    final provider = context.read<SynapseProvider>();
+
+    final thought = Thought(
+      id: const Uuid().v4(),
+      title: secret.title,
+      description: secret.description,
+      userNotes: decrypted,
+      type: ThoughtType.link,
+      category: ThoughtCategory.other,
+      tags: const ['from-vault'],
+      createdAt: DateTime.now(),
+      updatedAt: DateTime.now(),
+    );
+
+    await provider.addThought(thought);
+
+    final keepInVault = await _askKeepInVault();
+    if (!keepInVault) {
+      await _secretService.deleteSecret(secret.id);
+      await _loadSecrets();
+    }
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('"${secret.title}" pushed to your memories.'),
+        ),
+      );
+    }
+  }
+
+  Future<bool> _askKeepInVault() async {
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Keep in Vault?'),
+        content: const Text(
+          'The secret has been pushed to Memories. '
+          'Do you also want to keep a copy in the Vault?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Remove from Vault'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Keep both'),
+          ),
+        ],
+      ),
+    );
+    return result ?? true;
   }
 
   void _confirmDelete(SecretItem secret) {

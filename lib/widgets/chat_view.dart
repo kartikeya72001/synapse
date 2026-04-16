@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -5,8 +6,10 @@ import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:markdown/markdown.dart' as md;
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
+import 'package:timeago/timeago.dart' as timeago;
 import 'package:url_launcher/url_launcher.dart';
 import '../models/chat_message.dart';
+import '../models/chat_conversation.dart';
 import '../providers/synapse_provider.dart';
 import '../theme/app_theme.dart';
 
@@ -24,6 +27,10 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
   bool _inputVisible = true;
   double _lastScrollOffset = 0;
 
+  String _streamingText = '';
+  bool _isStreaming = false;
+  bool _showConversationList = false;
+
   @override
   void initState() {
     super.initState();
@@ -33,7 +40,7 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
     )..repeat();
     _scrollController.addListener(_onScroll);
     _controller.addListener(_onTextChanged);
-    WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
+    WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom(animate: false));
   }
 
   @override
@@ -86,12 +93,12 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
             bottom: false,
             child: Column(
               children: [
-                _buildHeader(isDark, messages.isNotEmpty),
+                _buildHeader(isDark, messages.isNotEmpty, provider),
                 Expanded(
                   child: Stack(
                     children: [
                       Positioned.fill(
-                        child: messages.isEmpty
+                        child: messages.isEmpty && !_isStreaming && !isLoading
                             ? _buildEmptyChat(isDark, provider)
                             : ListView.builder(
                                 controller: _scrollController,
@@ -102,15 +109,24 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
                                   148,
                                 ),
                                 itemCount:
-                                    messages.length + (isLoading ? 1 : 0),
+                                    messages.length +
+                                    (_isStreaming ? 1 : 0) +
+                                    (isLoading && !_isStreaming ? 1 : 0),
                                 itemBuilder: (context, index) {
-                                  if (index == messages.length && isLoading) {
+                                  if (index == messages.length && _isStreaming) {
+                                    return _buildStreamingBubble(isDark);
+                                  }
+                                  if (index == messages.length && isLoading && !_isStreaming) {
                                     return _buildTypingDots(isDark);
                                   }
-                                  return _buildBubble(messages[index], isDark);
+                                  return RepaintBoundary(
+                                    child: _buildBubble(messages[index], isDark),
+                                  );
                                 },
                               ),
                       ),
+                      if (_showConversationList)
+                        _buildConversationListOverlay(isDark, provider),
                       Positioned(
                         left: 0,
                         right: 0,
@@ -142,62 +158,351 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
     );
   }
 
-  Widget _buildHeader(bool isDark, bool hasMessages) {
+  Widget _buildHeader(bool isDark, bool hasMessages, SynapseProvider provider) {
+    final conversation = provider.currentConversation;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 14, 16, 10),
+      padding: const EdgeInsets.fromLTRB(24, 14, 8, 10),
       child: Row(
         children: [
-          AnimatedBuilder(
-            animation: _shimmerCtrl,
-            builder: (context, child) {
-              return ShaderMask(
-                blendMode: BlendMode.srcIn,
-                shaderCallback: (bounds) {
-                  final dx = _shimmerCtrl.value * 3 - 1;
-                  return LinearGradient(
-                    begin: Alignment(dx - 0.3, 0),
-                    end: Alignment(dx + 0.3, 0),
-                    colors: [
-                      isDark ? SynapseColors.darkInk : SynapseColors.ink,
-                      isDark ? SynapseColors.darkAccent : SynapseColors.accent,
-                      isDark ? SynapseColors.darkInk : SynapseColors.ink,
-                    ],
-                    stops: const [0.0, 0.5, 1.0],
-                  ).createShader(bounds);
-                },
-                child: child,
-              );
-            },
-            child: Text(
-              'Cortex',
-              style: GoogleFonts.spaceGrotesk(
-                fontSize: 28,
-                fontWeight: FontWeight.w800,
-                color: Colors.white,
-                letterSpacing: -0.5,
+          GestureDetector(
+            onTap: () => setState(() => _showConversationList = !_showConversationList),
+            child: Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: _showConversationList
+                    ? SynapseColors.accent.withValues(alpha: 0.15)
+                    : SynapseColors.ink.withValues(alpha: 0.04),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(
+                _showConversationList ? Icons.close_rounded : Icons.menu_rounded,
+                size: 18,
+                color: _showConversationList
+                    ? SynapseColors.accent
+                    : SynapseColors.inkFaint,
               ),
             ),
           ),
-          const Spacer(),
+          const SizedBox(width: 12),
+          Expanded(
+            child: GestureDetector(
+              onTap: conversation != null
+                  ? () => _showRenameDialog(context, provider, conversation)
+                  : null,
+              child: AnimatedBuilder(
+                animation: _shimmerCtrl,
+                builder: (context, child) {
+                  return ShaderMask(
+                    blendMode: BlendMode.srcIn,
+                    shaderCallback: (bounds) {
+                      final dx = _shimmerCtrl.value * 3 - 1;
+                      return LinearGradient(
+                        begin: Alignment(dx - 0.3, 0),
+                        end: Alignment(dx + 0.3, 0),
+                        colors: [
+                          isDark ? SynapseColors.darkInk : SynapseColors.ink,
+                          isDark ? SynapseColors.darkAccent : SynapseColors.accent,
+                          isDark ? SynapseColors.darkInk : SynapseColors.ink,
+                        ],
+                        stops: const [0.0, 0.5, 1.0],
+                      ).createShader(bounds);
+                    },
+                    child: child,
+                  );
+                },
+                child: Text(
+                  conversation?.title ?? 'Cortex',
+                  style: GoogleFonts.spaceGrotesk(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w800,
+                    color: Colors.white,
+                    letterSpacing: -0.5,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ),
+          ),
+          GestureDetector(
+            onTap: () async {
+              await provider.createNewConversation();
+              _scrollToBottom();
+            },
+            child: Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: SynapseColors.accent.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(
+                Icons.add_rounded,
+                size: 18,
+                color: SynapseColors.accent,
+              ),
+            ),
+          ),
+          const SizedBox(width: 4),
           if (hasMessages)
             GestureDetector(
               onTap: () => _confirmClearChat(context),
               child: Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: SynapseColors.ink.withValues(alpha: 0.04),
+                  color: SynapseColors.error.withValues(alpha: 0.08),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Icon(
                   Icons.delete_sweep_outlined,
                   size: 18,
-                  color: SynapseColors.inkFaint,
+                  color: SynapseColors.error.withValues(alpha: 0.7),
                 ),
               ),
             ),
         ],
       ),
     );
+  }
+
+  Widget _buildConversationListOverlay(bool isDark, SynapseProvider provider) {
+    final conversations = provider.conversations;
+    return Positioned.fill(
+      child: GestureDetector(
+        onTap: () => setState(() => _showConversationList = false),
+        child: Container(
+          color: Colors.black.withValues(alpha: 0.3),
+          child: Align(
+            alignment: Alignment.topCenter,
+            child: GestureDetector(
+              onTap: () {},
+              child: Container(
+                margin: const EdgeInsets.fromLTRB(12, 4, 12, 0),
+                constraints: BoxConstraints(
+                  maxHeight: MediaQuery.of(context).size.height * 0.55,
+                ),
+                decoration: BoxDecoration(
+                  color: isDark ? SynapseColors.darkCard : Colors.white,
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: SynapseShadows.elevated,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 16, 12, 8),
+                      child: Row(
+                        children: [
+                          Text(
+                            'Conversations',
+                            style: GoogleFonts.spaceGrotesk(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w700,
+                              color: isDark ? SynapseColors.darkInk : SynapseColors.ink,
+                            ),
+                          ),
+                          const Spacer(),
+                          Text(
+                            '${conversations.length}',
+                            style: GoogleFonts.spaceGrotesk(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: SynapseColors.inkMuted,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                        ],
+                      ),
+                    ),
+                    const Divider(height: 1),
+                    Flexible(
+                      child: ListView.builder(
+                        padding: const EdgeInsets.symmetric(vertical: 4),
+                        shrinkWrap: true,
+                        itemCount: conversations.length,
+                        itemBuilder: (context, index) {
+                          final conv = conversations[index];
+                          final isCurrent = conv.id == provider.currentConversationId;
+                          return _buildConversationTile(
+                            conv, isCurrent, isDark, provider,
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildConversationTile(
+    ChatConversation conv,
+    bool isCurrent,
+    bool isDark,
+    SynapseProvider provider,
+  ) {
+    return Dismissible(
+      key: Key(conv.id),
+      direction: conv.isSaved
+          ? DismissDirection.none
+          : DismissDirection.endToStart,
+      confirmDismiss: (_) async {
+        return await _confirmDeleteConversation(context, conv.title);
+      },
+      onDismissed: (_) => provider.deleteConversation(conv.id),
+      background: Container(
+        alignment: Alignment.centerRight,
+        padding: const EdgeInsets.only(right: 20),
+        color: SynapseColors.error.withValues(alpha: 0.15),
+        child: Icon(Icons.delete_rounded, color: SynapseColors.error, size: 20),
+      ),
+      child: GestureDetector(
+        onTap: () {
+          provider.switchConversation(conv.id);
+          setState(() => _showConversationList = false);
+          _scrollToBottom(animate: false);
+          _scrollToBottom(animate: false);
+        },
+        child: Container(
+          margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            color: isCurrent
+                ? (isDark
+                    ? SynapseColors.accent.withValues(alpha: 0.1)
+                    : SynapseColors.accent.withValues(alpha: 0.06))
+                : Colors.transparent,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      conv.title,
+                      style: GoogleFonts.spaceGrotesk(
+                        fontSize: 13,
+                        fontWeight: isCurrent ? FontWeight.w700 : FontWeight.w500,
+                        color: isDark ? SynapseColors.darkInk : SynapseColors.ink,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      timeago.format(conv.updatedAt),
+                      style: GoogleFonts.spaceGrotesk(
+                        fontSize: 10,
+                        color: SynapseColors.inkMuted,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              GestureDetector(
+                onTap: () => provider.toggleSaveConversation(conv.id),
+                child: Padding(
+                  padding: const EdgeInsets.all(4),
+                  child: Icon(
+                    conv.isSaved
+                        ? Icons.bookmark_rounded
+                        : Icons.bookmark_outline_rounded,
+                    size: 18,
+                    color: conv.isSaved
+                        ? SynapseColors.accent
+                        : SynapseColors.inkFaint,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 2),
+              GestureDetector(
+                onTap: () async {
+                  final confirmed = await _confirmDeleteConversation(
+                    context, conv.title,
+                  );
+                  if (confirmed) {
+                    provider.deleteConversation(conv.id);
+                  }
+                },
+                child: Padding(
+                  padding: const EdgeInsets.all(4),
+                  child: Icon(
+                    Icons.delete_outline_rounded,
+                    size: 18,
+                    color: SynapseColors.error.withValues(alpha: 0.6),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<bool> _confirmDeleteConversation(BuildContext context, String title) async {
+    return await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete conversation?'),
+        content: Text('Delete "$title"? This cannot be undone.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: FilledButton.styleFrom(backgroundColor: SynapseColors.error),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    ) ?? false;
+  }
+
+  void _showRenameDialog(
+    BuildContext context,
+    SynapseProvider provider,
+    ChatConversation conversation,
+  ) {
+    final renameCtrl = TextEditingController(text: conversation.title);
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Rename conversation'),
+        content: TextField(
+          controller: renameCtrl,
+          autofocus: true,
+          decoration: const InputDecoration(hintText: 'Enter title'),
+          onSubmitted: (val) {
+            if (val.trim().isNotEmpty) {
+              provider.renameConversation(conversation.id, val.trim());
+            }
+            Navigator.pop(ctx);
+          },
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () {
+              final val = renameCtrl.text.trim();
+              if (val.isNotEmpty) {
+                provider.renameConversation(conversation.id, val);
+              }
+              Navigator.pop(ctx);
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    ).then((_) => renameCtrl.dispose());
   }
 
   Widget _buildEmptyChat(bool isDark, SynapseProvider provider) {
@@ -411,6 +716,31 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
       extensionSet: md.ExtensionSet.gitHubWeb,
       onTapLink: (_, href, __) {
         if (href != null) launchUrl(Uri.parse(href));
+      },
+      sizedImageBuilder: (config) {
+        final uriStr = config.uri.toString();
+        if (uriStr.startsWith('/') && File(uriStr).existsSync()) {
+          return ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: Image.file(
+              File(uriStr),
+              width: config.width,
+              height: config.height,
+              fit: BoxFit.contain,
+              errorBuilder: (_, __, ___) => const Text('[Image not found]'),
+            ),
+          );
+        }
+        return ClipRRect(
+          borderRadius: BorderRadius.circular(12),
+          child: Image.network(
+            uriStr,
+            width: config.width,
+            height: config.height,
+            fit: BoxFit.contain,
+            errorBuilder: (_, __, ___) => const Text('[Image failed to load]'),
+          ),
+        );
       },
       styleSheet: MarkdownStyleSheet(
         p: GoogleFonts.spaceGrotesk(fontSize: 14, height: 1.5, color: ink),
@@ -680,20 +1010,108 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
     final text = _controller.text.trim();
     if (text.isEmpty) return;
     _controller.clear();
-    setState(() => _inputVisible = true);
+    setState(() {
+      _inputVisible = true;
+      _showConversationList = false;
+    });
     _scrollToBottom();
-    await provider.sendChatMessage(text);
+    await provider.sendChatMessage(
+      text,
+      onStreamChunk: (partial) {
+        if (!mounted) return;
+        setState(() {
+          _streamingText = partial;
+          _isStreaming = true;
+        });
+        _scrollToBottom();
+      },
+    );
+    if (mounted) {
+      setState(() {
+        _streamingText = '';
+        _isStreaming = false;
+      });
+    }
     _scrollToBottom();
   }
 
-  void _scrollToBottom() {
+  Widget _buildStreamingBubble(bool isDark) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 30,
+            height: 30,
+            margin: const EdgeInsets.only(top: 4, right: 10),
+            decoration: BoxDecoration(
+              color: isDark
+                  ? SynapseColors.darkLavender
+                  : SynapseColors.lavenderLight,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(
+              Icons.auto_awesome_rounded,
+              size: 14,
+              color: isDark ? SynapseColors.darkAccent : SynapseColors.accent,
+            ),
+          ),
+          Flexible(
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+              decoration: BoxDecoration(
+                color: isDark ? SynapseColors.darkCard : Colors.white,
+                border: isDark
+                    ? null
+                    : Border.all(
+                        color: Colors.black.withValues(alpha: 0.04),
+                      ),
+                borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(22),
+                  topRight: Radius.circular(22),
+                  bottomLeft: Radius.circular(6),
+                  bottomRight: Radius.circular(22),
+                ),
+              ),
+              child: _streamingText.isEmpty
+                  ? _buildInlineTypingDots(isDark)
+                  : _buildMarkdown(_streamingText, isDark),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInlineTypingDots(bool isDark) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: List.generate(
+        3,
+        (i) => Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 3),
+          child: _PulseDot(delay: i * 180),
+        ),
+      ),
+    );
+  }
+
+  void _scrollToBottom({bool animate = true}) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scrollController.hasClients) {
-        _scrollController.animateTo(
-          _scrollController.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeOut,
-        );
+        if (animate) {
+          _scrollController.animateTo(
+            _scrollController.position.maxScrollExtent,
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeOut,
+          );
+        } else {
+          _scrollController.jumpTo(
+            _scrollController.position.maxScrollExtent,
+          );
+        }
         setState(() => _inputVisible = true);
       }
     });
